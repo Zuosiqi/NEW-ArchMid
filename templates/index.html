@@ -1,0 +1,1531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>轻量级商品管理系统 | Modern Soft-Neo UI</title>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Element Plus CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+    <!-- Element Plus JS -->
+    <script src="https://unpkg.com/element-plus"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- ECharts (数据看板可视化) -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Nunito', 'Noto Sans SC', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f5ff',
+                            100: '#e5edff',
+                            200: '#cddbfe',
+                            300: '#b4c6fc',
+                            400: '#8da2fb',
+                            500: '#6875f5',
+                            600: '#5850ec',
+                            700: '#5145cd',
+                        },
+                        accent: {
+                            100: '#fef3c7',
+                            400: '#fbbf24',
+                            500: '#f59e0b',
+                        }
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 40px -10px rgba(0,0,0,0.08)',
+                        'soft-lg': '0 20px 50px -20px rgba(104, 117, 245, 0.25)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #f8fafc;
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,0) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,0) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,0) 0, transparent 50%);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+
+        /* =========================
+           统一“商品建档-类别下拉框”风格
+           目标：对齐页面其它 input 的 Tailwind 风格：
+           bg-slate-50 + border-slate-200 + rounded-xl + px-4 py-3 + focus:ring-brand-400
+        ========================= */
+        .neo-input-select .el-input__wrapper {
+            background-color: #f8fafc; /* slate-50 */
+            border: 1px solid #e2e8f0; /* slate-200 */
+            border-radius: 0.75rem;    /* rounded-xl */
+            box-shadow: none;
+            padding: 0 1rem;           /* px-4 */
+            min-height: 48px;          /* 贴近 py-3 的输入框高度 */
+            transition: all 150ms ease;
+        }
+        /* 让内部输入文字/占位符对齐其它输入框的观感 */
+        .neo-input-select .el-input__inner {
+            font-size: 1rem;
+            color: #334155; /* slate-700 */
+        }
+        .neo-input-select .el-input__inner::placeholder {
+            color: #94a3b8; /* slate-400 */
+        }
+        /* Focus 样式：模拟 Tailwind 的 ring-2 ring-brand-400 + focus:bg-white */
+        .neo-input-select.is-focus .el-input__wrapper,
+        .neo-input-select .el-input__wrapper.is-focus {
+            background-color: #ffffff;
+            border-color: transparent;
+            box-shadow: 0 0 0 2px rgba(141, 162, 251, 0.6); /* brand-400 */
+        }
+        /* 下拉箭头颜色/对齐 */
+        .neo-input-select .el-input__suffix-inner {
+            color: #94a3b8; /* slate-400 */
+        }
+        
+        .fade-enter-active, .fade-leave-active {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .fade-enter-from, .fade-leave-to {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+    </style>
+</head>
+<body class="text-slate-700 antialiased h-screen bg-gradient-to-br from-brand-50 via-white to-blue-50 overflow-hidden">
+{% raw %}
+<div id="app" class="w-full h-full px-4 md:px-8 py-6 flex flex-col">
+    
+    <!-- Header -->
+    <header class="shrink-0 flex items-center justify-between mb-6 bg-white/60 backdrop-blur-md px-8 py-5 rounded-3xl shadow-soft border border-white">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-gradient-to-br from-brand-400 to-brand-600 rounded-2xl flex items-center justify-center shadow-soft-lg text-white text-xl">
+                <i class="fa-solid fa-store"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">商品管理系统</h1>
+                <p class="text-sm text-slate-500 font-medium">轻量级门店商品管理系统</p>
+            </div>
+        </div>
+        <div class="hidden md:flex bg-slate-100 p-1.5 rounded-full shadow-inner">
+            <button v-for="tab in tabs" :key="tab.id" 
+                    @click="currentTab = tab.id"
+                    :class="['px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-300', 
+                             currentTab === tab.id ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700']">
+                {{ tab.name }}
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 bg-white rounded-3xl shadow-soft border border-slate-100 relative flex flex-col min-h-0">
+        
+        <!-- Decorative blob -->
+        <div class="absolute -top-24 -right-24 w-48 h-48 bg-brand-100 rounded-full mix-blend-multiply filter blur-2xl opacity-70 animate-blob pointer-events-none"></div>
+        <div class="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-100 rounded-full mix-blend-multiply filter blur-2xl opacity-70 animate-blob animation-delay-2000 pointer-events-none"></div>
+
+        <div class="p-8 relative z-10 flex-1 flex flex-col min-h-0 overflow-y-auto">
+            
+            <transition name="fade" mode="out-in">
+                <!-- Tab: Products List -->
+                <div v-if="currentTab === 'list'" key="list" class="flex flex-col h-full">
+                    <div class="mb-5 shrink-0">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div>
+                                <h2 class="text-xl font-extrabold text-slate-800 tracking-tight">商品列表</h2>
+                                <p class="text-sm text-slate-500 mt-1">已启用分页 + 排序，避免一次性加载大量数据</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button @click="fetchProducts" class="bg-brand-50 hover:bg-brand-100 text-brand-600 px-5 py-2 rounded-full font-semibold transition-colors shadow-sm text-sm flex items-center gap-2">
+                                    刷新数据
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-white/70 backdrop-blur rounded-2xl border border-slate-100 shadow-soft p-4">
+                            <div class="flex flex-wrap items-center gap-3">
+                                <div class="text-xs font-bold text-slate-500">排序</div>
+                                <el-select v-model="sortBy" size="small" style="width: 150px" @change="onSortChange">
+                                    <el-option label="按ID" value="product_id"></el-option>
+                                    <el-option label="按价格" value="price"></el-option>
+                                    <el-option label="按库存" value="stock_quantity"></el-option>
+                                    <el-option label="按销量" value="sold_qty"></el-option>
+                                </el-select>
+                                <el-select v-model="sortOrder" size="small" style="width: 120px" @change="onSortChange">
+                                    <el-option label="降序" value="desc"></el-option>
+                                    <el-option label="升序" value="asc"></el-option>
+                                </el-select>
+
+                                <div class="ml-0 md:ml-3 text-xs font-bold text-slate-500">每页</div>
+                                <el-select v-model="pageSize" size="small" style="width: 110px" @change="onPageSizeChange">
+                                    <el-option label="10 条" :value="10"></el-option>
+                                    <el-option label="20 条" :value="20"></el-option>
+                                    <el-option label="50 条" :value="50"></el-option>
+                                </el-select>
+                            </div>
+                            <div class="text-sm text-slate-500">
+                                总计：<span class="font-extrabold text-slate-800">{{ total }}</span> 条
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-1 overflow-auto rounded-2xl border border-slate-100 shadow-sm">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50/80 text-slate-500 text-xs uppercase tracking-wider">
+                                    <th class="p-4 font-bold rounded-tl-2xl">ID</th>
+                                    <th class="p-4 font-bold">商品名称</th>
+                                    <th class="p-4 font-bold">条形码</th>
+                                    <th class="p-4 font-bold">类别</th>
+                                    <th class="p-4 font-bold">价格</th>
+                                    <th class="p-4 font-bold">销量</th>
+                                    <th class="p-4 font-bold">库存</th>
+                                    <th class="p-4 font-bold">状态</th>
+                                    <th class="p-4 font-bold rounded-tr-2xl">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-sm">
+                                <tr v-if="products.length === 0">
+                                    <td colspan="9" class="p-8 text-center text-slate-400">暂无数据，请点击刷新或添加商品</td>
+                                </tr>
+                                <tr v-for="(p, index) in products" :key="p.product_id" 
+                                    class="border-b border-slate-50 hover:bg-brand-50/30 transition-colors">
+                                    <td class="p-4 font-medium text-slate-400">#{{ p.product_id }}</td>
+                                    <td class="p-4 font-bold text-slate-700">{{ p.product_name }}</td>
+                                    <td class="p-4 font-mono text-slate-500 text-xs bg-slate-100 px-2 py-1 rounded inline-block mt-3">{{ p.barcode }}</td>
+                                    <td class="p-4">
+                                        <span class="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-bold">{{ p.category_name }}</span>
+                                    </td>
+                                    <td class="p-4 font-bold text-emerald-600">￥{{ Number(p.price).toFixed(2) }}</td>
+                                    <td class="p-4 font-mono text-slate-600">{{ (p.sold_qty ?? 0) }}</td>
+                                    <td class="p-4">
+                                        <span :class="p.stock_quantity > 50 ? 'text-slate-600' : 'text-rose-500 font-bold'">
+                                            {{ p.stock_quantity }}
+                                        </span>
+                                    </td>
+                                    <td class="p-4">
+                                        <span v-if="p.status === '在售'" class="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg text-xs font-bold border border-emerald-100">
+                                            <i class="fa-solid fa-circle-check mr-1"></i>{{ p.status }}
+                                        </span>
+                                        <span v-else class="bg-rose-50 text-rose-600 px-2 py-1 rounded-lg text-xs font-bold border border-rose-100">
+                                            <i class="fa-solid fa-circle-xmark mr-1"></i>{{ p.status }}
+                                        </span>
+                                    </td>
+                                    <td class="p-4">
+                                        <div class="flex items-center gap-2">
+                                            <button @click="openEdit(p)"
+                                                class="bg-white hover:bg-brand-50 text-brand-600 border border-brand-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">
+                                                <i class="fa-solid fa-pen-to-square mr-1"></i>编辑
+                                            </button>
+                                            <button @click="confirmDelete(p)"
+                                                class="bg-white hover:bg-rose-50 text-rose-600 border border-rose-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">
+                                                <i class="fa-solid fa-trash mr-1"></i>删除
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-4 shrink-0 flex justify-end">
+                        <el-pagination
+                            background
+                            layout="prev, pager, next"
+                            :current-page="page"
+                            :page-size="pageSize"
+                            :total="total"
+                            @current-change="onPageChange"
+                        />
+                    </div>
+                </div>
+
+                <!-- Tab: Business Center -->
+                <div v-else-if="currentTab === 'biz'" key="biz" class="flex flex-col gap-6 min-h-0">
+                    <div class="shrink-0">
+                        <h2 class="text-xl font-extrabold text-slate-800 tracking-tight">业务办理中心</h2>
+                        <p class="text-slate-500 mt-1 text-sm leading-relaxed">
+                            在此完成商品建档、销售下单与撤销、进货入库，以及库存与库存流水的核对。系统会对关键字段进行校验，并在违规时给出明确的中文提示。
+                        </p>
+                    </div>
+
+                    <!-- 商品建档（新增商品） -->
+                    <div class="grid grid-cols-1 gap-6 shrink-0">
+                        <div class="bg-white/70 backdrop-blur rounded-3xl border border-slate-100 shadow-soft p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="font-extrabold text-slate-800">商品建档（新增商品）</div>
+                                <div class="text-xs text-slate-500">用于新商品上架与信息维护</div>
+                            </div>
+
+                            <form @submit.prevent="submitProduct" class="space-y-5">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div>
+                                        <label class="block text-sm font-bold text-slate-700 mb-2">商品名称</label>
+                                        <input v-model="form.name" type="text" required
+                                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-all shadow-sm"
+                                            placeholder="例如：高级无线鼠标">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-bold text-slate-700 mb-2">条形码（唯一）</label>
+                                        <input v-model="form.barcode" type="text" required
+                                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-all shadow-sm"
+                                            placeholder="唯一标识码">
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                    <div>
+                                        <label class="block text-sm font-bold text-slate-700 mb-2">商品类别</label>
+                                        <!-- 用原生 select + 与其他输入框一致的样式，保证 UI 画风统一 -->
+                                        <select v-model.number="form.category_id" required
+                                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-all shadow-sm">
+                                            <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.label }}</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-bold text-slate-700 mb-2">价格</label>
+                                        <div class="relative">
+                                            <span class="absolute left-4 top-3 text-slate-400">￥</span>
+                                            <input v-model="form.price" type="number" step="0.01" required
+                                                class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-all shadow-sm"
+                                                placeholder="0.00">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-bold text-slate-700 mb-2">初始库存</label>
+                                        <input v-model="form.stock" type="number" required
+                                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-all shadow-sm"
+                                            placeholder="0">
+                                    </div>
+                                </div>
+
+                                <div class="pt-1">
+                                    <button type="submit" :disabled="submitting"
+                                        class="w-full md:w-auto bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold py-3 px-8 rounded-xl shadow-soft-lg transform hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2">
+                                        <i v-if="submitting" class="fa-solid fa-circle-notch fa-spin"></i>
+                                        <i v-else class="fa-solid fa-paper-plane"></i>
+                                        保存
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 shrink-0">
+                        <!-- Sales Order -->
+                        <div class="bg-white/70 backdrop-blur rounded-3xl border border-slate-100 shadow-soft p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="font-extrabold text-slate-800">① 销售开单</div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-700 mb-2">选择顾客</label>
+                                    <el-select v-model="orderForm.customer_id" filterable class="w-full" placeholder="选择顾客">
+                                        <el-option v-for="c in customersOptions" :key="c.id" :label="c.display_name" :value="c.id"></el-option>
+                                    </el-select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-700 mb-2">收银员 / 经办人</label>
+                                    <el-select v-model="orderForm.emp_id" filterable class="w-full" placeholder="选择收银员">
+                                        <el-option v-for="e in employeesOptions" :key="e.id" :label="e.display_name" :value="e.id"></el-option>
+                                    </el-select>
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="block text-sm font-bold text-slate-700">商品明细</label>
+                                    <button type="button" @click="addOrderItem"
+                                            class="text-sm font-bold text-brand-600 hover:text-brand-700">
+                                        <i class="fa-solid fa-circle-plus mr-1"></i>添加商品
+                                    </button>
+                                </div>
+
+                                <div class="space-y-3">
+                                    <div v-for="(it, idx) in orderForm.items" :key="idx" class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                                        <div class="md:col-span-7">
+                                            <el-select v-model="it.product_id" filterable class="w-full" placeholder="选择商品">
+                                                <el-option v-for="p in productsSaleOptions" :key="p.id" :label="p.display_name" :value="p.id"></el-option>
+                                            </el-select>
+                                        </div>
+                                        <div class="md:col-span-3">
+                                            <el-input-number v-model="it.quantity" :min="1" :max="999999" class="w-full" controls-position="right"></el-input-number>
+                                        </div>
+                                        <div class="md:col-span-2 flex items-center justify-end">
+                                            <button type="button" @click="removeOrderItem(idx)" class="text-rose-600 hover:text-rose-700 font-bold text-sm">
+                                                删除
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 flex flex-col md:flex-row gap-3">
+                                <button @click="createOrderBiz" :disabled="bizWorking"
+                                        class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-soft flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-cash-register"></i> 结算开单
+                                </button>
+
+                                <button @click="cancelLastOrderBiz" :disabled="bizWorking || !lastOrder"
+                                        class="bg-rose-600 hover:bg-rose-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-soft flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-rotate-left"></i> 撤销本单
+                                </button>
+                            </div>
+
+                            <div v-if="lastOrder" class="mt-4 bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 text-sm text-slate-700">
+                                <div class="font-extrabold text-slate-800">已开单</div>
+                                <div class="mt-1 text-slate-600">
+                                    合计金额：<span class="font-extrabold text-emerald-700">￥{{ Number(lastOrder.total_amount).toFixed(2) }}</span>
+                                    <span class="mx-2 text-slate-300">|</span>
+                                    时间：<span class="font-mono text-xs text-slate-500">{{ lastOrder.time }}</span>
+                                </div>
+                                <div class="mt-2 text-xs text-slate-500">如需撤销，请点击“撤销本单”，系统会自动回补库存并记录流水。</div>
+                            </div>
+                        </div>
+
+                        <!-- Purchase -->
+                        <div class="bg-white/70 backdrop-blur rounded-3xl border border-slate-100 shadow-soft p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="font-extrabold text-slate-800">② 进货入库</div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-700 mb-2">选择供应商</label>
+                                    <el-select v-model="purchaseForm.supplier_id" filterable class="w-full" placeholder="选择供应商">
+                                        <el-option v-for="s in suppliersOptions" :key="s.id" :label="s.display_name" :value="s.id"></el-option>
+                                    </el-select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-700 mb-2">经办人</label>
+                                    <el-select v-model="purchaseForm.emp_id" filterable class="w-full" placeholder="选择经办人">
+                                        <el-option v-for="e in employeesOptions" :key="e.id" :label="e.display_name" :value="e.id"></el-option>
+                                    </el-select>
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="block text-sm font-bold text-slate-700">入库明细</label>
+                                    <button type="button" @click="addPurchaseItem"
+                                            class="text-sm font-bold text-brand-600 hover:text-brand-700">
+                                        <i class="fa-solid fa-circle-plus mr-1"></i>添加商品
+                                    </button>
+                                </div>
+                                <div class="space-y-3">
+                                    <div v-for="(it, idx) in purchaseForm.items" :key="idx" class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                                        <div class="md:col-span-5">
+                                            <el-select v-model="it.product_id" filterable class="w-full" placeholder="选择商品">
+                                                <el-option v-for="p in productsAllOptions" :key="p.id" :label="p.display_name" :value="p.id"></el-option>
+                                            </el-select>
+                                        </div>
+                                        <div class="md:col-span-3">
+                                            <el-input-number v-model="it.quantity" :min="1" :max="999999" class="w-full" controls-position="right"></el-input-number>
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <el-input v-model="it.unit_cost" placeholder="单位成本" class="w-full"></el-input>
+                                        </div>
+                                        <div class="md:col-span-2 flex items-center justify-end">
+                                            <button type="button" @click="removePurchaseItem(idx)"
+                                                    class="text-rose-600 hover:text-rose-700 font-bold text-sm whitespace-nowrap min-w-[52px] text-right">
+                                                删除
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <button @click="createPurchaseBiz" :disabled="bizWorking"
+                                        class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-soft flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-truck-ramp-box"></i> 入库
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1 min-h-0">
+                        <!-- Audit -->
+                        <div class="bg-white/70 backdrop-blur rounded-3xl border border-slate-100 shadow-soft p-6 flex flex-col min-h-0">
+                            <div class="flex items-center justify-between mb-4 shrink-0">
+                                <div class="font-extrabold text-slate-800">③ 库存与流水查询</div>
+                            </div>
+
+                            <div class="flex gap-2 shrink-0">
+                                <el-select v-model="auditProductId" filterable class="flex-1" placeholder="选择商品">
+                                    <el-option v-for="p in productsAllOptions" :key="p.id" :label="p.display_name" :value="p.id"></el-option>
+                                </el-select>
+                                <button @click="auditProductAndLedger" :disabled="bizWorking || !auditProductId"
+                                        class="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-soft flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-magnifying-glass"></i> 查询
+                                </button>
+                            </div>
+
+                            <div v-if="auditProduct" class="mt-4 text-sm text-slate-700 shrink-0">
+                                <div class="font-bold text-slate-800">{{ auditProduct.product_name }}</div>
+                                <div class="mt-1 text-slate-500">
+                                    类别：{{ auditProduct.category_name }} ｜ 价格：￥{{ Number(auditProduct.price).toFixed(2) }} ｜ 库存：<span class="font-extrabold text-slate-800">{{ auditProduct.stock_quantity }}</span> ｜ 状态：{{ auditProduct.status }}
+                                </div>
+                            </div>
+
+                            <div class="mt-4 flex-1 min-h-0 overflow-auto rounded-2xl border border-slate-100 bg-white shadow-sm">
+                                <table class="w-full text-left border-collapse text-sm">
+                                    <thead>
+                                        <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                                            <th class="p-3 font-bold">时间</th>
+                                            <th class="p-3 font-bold">变动</th>
+                                            <th class="p-3 font-bold">备注</th>
+                                            <th class="p-3 font-bold">业务类型</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-if="auditLedger.length === 0">
+                                            <td colspan="4" class="p-6 text-center text-slate-400">暂无流水记录</td>
+                                        </tr>
+                                        <tr v-for="row in auditLedger" :key="row.ledger_id" class="border-b border-slate-50">
+                                            <td class="p-3 text-slate-500 font-mono text-xs">{{ row.created_at }}</td>
+                                            <td class="p-3 font-extrabold" :class="row.change_qty >= 0 ? 'text-emerald-600' : 'text-rose-600'">
+                                                {{ row.change_qty }}
+                                            </td>
+                                            <td class="p-3 text-slate-600">{{ row.note ?? '' }}</td>
+                                            <td class="p-3 text-slate-600">{{ ledgerTypeText(row.ref_type) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Logs -->
+                        <div class="flex-1 bg-slate-900 rounded-2xl p-6 font-mono text-sm text-emerald-400 shadow-inner overflow-y-auto relative min-h-[300px]">
+                            <div class="absolute top-4 right-4 text-slate-600 text-xs">操作记录</div>
+                            <div v-if="bizLogs.length === 0" class="text-slate-600">等待业务操作…</div>
+                            <div v-for="(log, idx) in bizLogs" :key="idx" class="mb-1 leading-relaxed" v-html="formatBizLog(log)"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Complex Query -->
+                <div v-else-if="currentTab === 'query'" key="query" class="flex flex-col">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-4 shrink-0">
+                        <div>
+                            <h2 class="text-xl font-extrabold text-slate-800 tracking-tight">数据看板</h2>
+                            <p class="text-slate-500 text-sm mt-1">销售趋势、库存概览与热销商品统计，帮助店长快速了解经营情况。</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <el-button type="primary" plain @click="loadDashboardStats">刷新看板</el-button>
+                        </div>
+                    </div>
+
+                    <!-- Charts -->
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 shrink-0">
+                        <div class="bg-white/70 backdrop-blur rounded-3xl border border-slate-100 shadow-soft p-5">
+                            <div class="flex items-center justify-between">
+                                <div class="font-extrabold text-slate-800">销售额/利润趋势（近14天）</div>
+                            </div>
+                            <div class="text-xs text-slate-500 mt-1">折线图：销售额与利润（利润基于订单明细成本快照）</div>
+                            <div id="chart_sales_profit" class="mt-3" style="height:260px;"></div>
+                        </div>
+
+                        <div class="bg-white/70 backdrop-blur rounded-3xl border border-slate-100 shadow-soft p-5">
+                            <div class="font-extrabold text-slate-800">库存余额趋势（近14天）</div>
+                            <div class="text-xs text-slate-500 mt-1">折线图：基于库存流水计算的“总库存余额”变化</div>
+                            <div id="chart_sold_qty" class="mt-3" style="height:260px;"></div>
+                        </div>
+
+                        <div class="bg-white/70 backdrop-blur rounded-3xl border border-slate-100 shadow-soft p-5">
+                            <div class="font-extrabold text-slate-800">当前库存（按类别）</div>
+                            <div class="text-xs text-slate-500 mt-1">柱状图：各类别库存总量（用于补货决策）</div>
+                            <div id="chart_stock_category" class="mt-3" style="height:260px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Member Top10 -->
+                    <div class="mt-6 bg-white/70 backdrop-blur rounded-3xl border border-slate-100 shadow-soft p-5">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                            <div>
+                                <div class="text-base font-extrabold text-slate-800">会员消费 TOP10（近30天）</div>
+                                <div class="text-xs text-slate-500 mt-1">用于识别高价值客户，指导会员运营与精准营销</div>
+                            </div>
+                            <el-button type="primary" plain @click="loadMemberTop">刷新排行</el-button>
+                        </div>
+
+                        <div v-if="memberTop.length > 0" class="mt-4 overflow-auto rounded-2xl border border-slate-100 bg-white">
+                            <table class="w-full text-left border-collapse text-sm">
+                                <thead>
+                                    <tr class="bg-slate-50/80 text-slate-500 text-xs uppercase tracking-wider">
+                                        <th class="p-4 font-bold rounded-tl-2xl">排名</th>
+                                        <th class="p-4 font-bold">会员</th>
+                                        <th class="p-4 font-bold">等级</th>
+                                        <th class="p-4 font-bold">近30天件数</th>
+                                        <th class="p-4 font-bold rounded-tr-2xl">近30天消费(￥)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(r, idx) in memberTop" :key="r.customer_id" class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                        <td class="p-4 text-slate-500 font-bold">{{ idx + 1 }}</td>
+                                        <td class="p-4 font-bold text-slate-800">{{ r.customer_name }}</td>
+                                        <td class="p-4 text-slate-600">{{ r.level }}</td>
+                                        <td class="p-4 font-mono text-slate-700">{{ r.item_qty_30d }}</td>
+                                        <td class="p-4 font-bold text-emerald-600">￥{{ Number(r.spend_30d).toFixed(2) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div v-else class="mt-4 text-sm text-slate-500">暂无排行数据（通常是近30天没有订单）。</div>
+                    </div>
+
+                    <!-- Top10 table (complex query) -->
+                    <div class="mt-6">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 gap-3 shrink-0">
+                            <div>
+                                <div class="text-base font-extrabold text-slate-800">热销商品 TOP10（复杂查询）</div>
+                                <div class="text-xs text-slate-500 mt-1">三表关联 + 分组聚合 + 排序：OrderDetail × Product × Category</div>
+                            </div>
+                            <button @click="fetchComplexQuery"
+                                class="bg-accent-500 hover:bg-accent-600 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-soft flex items-center gap-2">
+                                执行统计分析
+                            </button>
+                        </div>
+
+                        <div v-if="queryData.length > 0" class="overflow-auto rounded-2xl border border-slate-100 shadow-sm bg-white min-h-[420px]">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-accent-50/50 text-accent-800 text-xs uppercase tracking-wider">
+                                        <th class="p-4 font-bold rounded-tl-2xl">排名</th>
+                                        <th class="p-4 font-bold">类别名称</th>
+                                        <th class="p-4 font-bold">商品名称</th>
+                                        <th class="p-4 font-bold">总销量</th>
+                                        <th class="p-4 font-bold rounded-tr-2xl">总销售额 (￥)</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm">
+                                    <tr v-for="(row, index) in queryData" :key="index"
+                                        class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                        <td class="p-4">
+                                            <span class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs"
+                                                :class="index === 0 ? 'bg-yellow-100 text-yellow-700' : index === 1 ? 'bg-slate-200 text-slate-700' : index === 2 ? 'bg-orange-100 text-orange-800' : 'bg-slate-50 text-slate-500'">
+                                                {{ index + 1 }}
+                                            </span>
+                                        </td>
+                                        <td class="p-4 font-bold text-slate-600">{{ row.category_name }}</td>
+                                        <td class="p-4 font-bold text-slate-800">{{ row.product_name }}</td>
+                                        <td class="p-4 font-mono text-brand-600">{{ row.total_sold_quantity }} 件</td>
+                                        <td class="p-4 font-bold text-emerald-600 text-lg">￥{{ Number(row.total_sales_amount).toLocaleString('zh-CN', {minimumFractionDigits: 2}) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div v-else class="py-14 text-center border-2 border-dashed border-slate-100 rounded-3xl min-h-[420px] flex flex-col items-center justify-center">
+                            <div class="text-5xl text-slate-200 mb-4"><i class="fa-solid fa-chart-simple"></i></div>
+                            <p class="text-slate-400 font-medium">点击按钮生成热销TOP10统计结果</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Index Test -->
+                <div v-else-if="currentTab === 'index'" key="index" class="flex flex-col h-full">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 shrink-0">
+                        <div>
+                            <h2 class="text-xl font-extrabold text-slate-800 tracking-tight">系统性能分析（索引优化对比）</h2>
+                            <p class="text-slate-500 text-sm mt-1">对比“有索引/无索引”场景下的查询耗时，用于指导索引优化决策</p>
+                        </div>
+                        <button @click="runIndexTest" :disabled="testingIndex"
+                            class="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-soft flex items-center gap-2">
+                            {{ testingIndex ? '分析中...' : '开始分析' }}
+                        </button>
+                    </div>
+                    
+                    <div class="flex-1 bg-slate-900 rounded-2xl p-6 font-mono text-sm text-emerald-400 shadow-inner overflow-y-auto relative min-h-[300px]">
+                        <div class="absolute top-4 right-4 text-slate-600 text-xs">Server Logs</div>
+                        <div v-if="indexLogs.length === 0" class="text-slate-600">等待启动测试指令...</div>
+                        <div v-for="(log, idx) in indexLogs" :key="idx" class="mb-1 leading-relaxed" v-html="formatLog(log)"></div>
+                    </div>
+                </div>
+
+                <!-- Tab: Dynamic Query (New MOOC Requirement) -->
+                <div v-else-if="currentTab === 'dynamic'" key="dynamic" class="flex flex-col h-full min-h-0">
+                    <div class="mb-4 shrink-0">
+                        <h2 class="text-xl font-bold text-slate-800">动态SQL检索</h2>
+                        <p class="text-slate-500 text-sm mt-1">勾选条件并输入检索值，系统将依据条件动态构造SQL语句并执行展示</p>
+                    </div>
+                    
+                    <!-- Search Form -->
+                    <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-4 shadow-sm shrink-0">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div class="flex items-center gap-3">
+                                <el-checkbox v-model="dynamicForm.check_name" size="large">商品名称</el-checkbox>
+                                <el-input v-model="dynamicForm.name" placeholder="模糊查询 (%)" :disabled="!dynamicForm.check_name"></el-input>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <el-checkbox v-model="dynamicForm.check_barcode" size="large">条形码</el-checkbox>
+                                <el-input v-model="dynamicForm.barcode" placeholder="精确查询" :disabled="!dynamicForm.check_barcode"></el-input>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <el-checkbox v-model="dynamicForm.check_price" size="large">价格区间</el-checkbox>
+                                <div class="flex items-center gap-2 w-full">
+                                    <el-input v-model="dynamicForm.min_price" placeholder="最低" :disabled="!dynamicForm.check_price"></el-input>
+                                    <span class="text-slate-400">-</span>
+                                    <el-input v-model="dynamicForm.max_price" placeholder="最高" :disabled="!dynamicForm.check_price"></el-input>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <el-checkbox v-model="dynamicForm.check_status" size="large">状态</el-checkbox>
+                                <el-select v-model="dynamicForm.status" placeholder="选择状态" :disabled="!dynamicForm.check_status" class="w-full">
+                                    <el-option label="在售" value="在售"></el-option>
+                                    <el-option label="停售" value="停售"></el-option>
+                                </el-select>
+                            </div>
+                        </div>
+                        <div class="mt-6 flex justify-end">
+                            <el-button type="primary" size="large" color="#6875f5" @click="executeDynamicQuery" :loading="dynamicQuerying" class="shadow-soft px-8">
+                                执行检索查询
+                            </el-button>
+                        </div>
+                    </div>
+
+                    <!-- SQL Output -->
+                    <div class="mb-4 shrink-0">
+                        <h3 class="text-sm font-bold text-slate-700 mb-2">显示动态SQL语句构造结果 (字符串)：</h3>
+                        <div class="mb-2 text-xs text-slate-500">
+                            为避免一次返回过多数据，默认最多展示 <span class="font-bold text-slate-700">200</span> 条（对应 SQL 中的 <code class="bg-slate-100 px-1 rounded">LIMIT 200</code>）。
+                        </div>
+                        <div class="bg-slate-800 text-emerald-400 p-4 rounded-xl font-mono text-sm overflow-x-auto shadow-inner min-h-[60px] flex items-center whitespace-pre-wrap break-all">
+                            {{ generatedSql || '等待执行查询...' }}
+                        </div>
+                    </div>
+
+                    <!-- Results Table -->
+                    <div class="flex-1 min-h-0 flex flex-col">
+                        <h3 class="text-sm font-bold text-slate-700 mb-2 shrink-0">显示动态SQL语句执行结果：</h3>
+                        <div class="flex-1 overflow-auto rounded-2xl border border-slate-100 shadow-sm bg-white">
+                            <el-table :data="dynamicResults" style="width: 100%; height: 100%" v-loading="dynamicQuerying" stripe>
+                                <el-table-column prop="product_id" label="ID" width="100"></el-table-column>
+                                <el-table-column prop="product_name" label="商品名称" min-width="150"></el-table-column>
+                                <el-table-column prop="barcode" label="条形码" min-width="120"></el-table-column>
+                                <el-table-column prop="category_name" label="类别" min-width="100"></el-table-column>
+                                <el-table-column label="价格" min-width="100">
+                                    <template #default="scope">
+                                        <span class="font-bold text-emerald-600">￥{{ Number(scope.row.price).toFixed(2) }}</span>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column prop="stock_quantity" label="库存" min-width="100"></el-table-column>
+                                <el-table-column prop="status" label="状态" min-width="100"></el-table-column>
+                            </el-table>
+                        </div>
+                    </div>
+                </div>
+
+            </transition>
+        </div>
+    </main>
+</div>
+
+<script>
+    // SweetAlert2 Custom Config
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        customClass: {
+            popup: 'rounded-2xl shadow-soft border border-slate-100'
+        }
+    });
+
+    const ModernAlert = Swal.mixin({
+        customClass: {
+            popup: 'rounded-3xl shadow-soft-lg',
+            confirmButton: 'rounded-xl bg-brand-500 hover:bg-brand-600 px-6 py-2.5 text-white font-bold transition-colors outline-none focus:ring-4 focus:ring-brand-100',
+            cancelButton: 'rounded-xl bg-slate-100 hover:bg-slate-200 px-6 py-2.5 text-slate-700 font-bold transition-colors outline-none',
+            title: 'font-bold text-slate-800',
+            htmlContainer: 'text-slate-600'
+        },
+        buttonsStyling: false
+    });
+
+    const { createApp, ref, onMounted, watch, nextTick } = Vue;
+
+    const appInstance = createApp({
+        setup() {
+            const tabs = [
+                { id: 'list', name: '商品管理' },
+                { id: 'biz', name: '业务办理' },
+                { id: 'query', name: '经营看板' },
+                { id: 'dynamic', name: '高级检索' },
+                { id: 'index', name: '系统性能' }
+            ];
+            const currentTab = ref('list');
+            
+            // List State
+            const products = ref([]);
+            const loading = ref(false);
+            const page = ref(1);
+            const pageSize = ref(20);
+            const total = ref(0);
+            const sortBy = ref('product_id');
+            const sortOrder = ref('desc');
+            
+            // Form State
+            const form = ref({
+                name: '', barcode: '', category_id: 1, price: '', stock: ''
+            });
+            const submitting = ref(false);
+
+            // 面向用户的类别下拉（与数据库预置 Category(1~10) 对应）
+            const categoryOptions = ref([
+                { id: 1, label: '1-食品' },
+                { id: 2, label: '2-日用品' },
+                { id: 3, label: '3-数码' },
+                { id: 4, label: '4-服饰' },
+                { id: 5, label: '5-美妆' },
+                { id: 6, label: '6-母婴' },
+                { id: 7, label: '7-家电' },
+                { id: 8, label: '8-办公' },
+                { id: 9, label: '9-运动' },
+                { id: 10, label: '10-图书' },
+            ]);
+            
+            // Query State
+            const queryData = ref([]);
+            const querying = ref(false);
+            
+            // Index Test State
+            const indexLogs = ref([]);
+            const testingIndex = ref(false);
+
+            // Dynamic Query State
+            const dynamicForm = ref({
+                check_name: false, name: '',
+                check_barcode: false, barcode: '',
+                check_price: false, min_price: '', max_price: '',
+                check_status: false, status: ''
+            });
+            const dynamicResults = ref([]);
+            const generatedSql = ref('');
+            const dynamicQuerying = ref(false);
+
+            // =========================
+            // 业务办理：销售开单/撤销 + 进货入库 + 库存流水查询（面向门店用户，不暴露ID/接口）
+            // =========================
+            const bizLogs = ref([]);
+            const bizWorking = ref(false);
+
+            // 下拉选项
+            const customersOptions = ref([]);
+            const employeesOptions = ref([]);
+            const suppliersOptions = ref([]);
+            const productsSaleOptions = ref([]); // 仅“在售”，用于销售
+            const productsAllOptions = ref([]);  // 全部，用于进货/查询
+
+            // 最近一笔订单（用于“一键撤销”，不让用户输入订单号）
+            const lastOrder = ref(null); // {order_id, total_amount, time}
+
+            const orderForm = ref({
+                customer_id: null,
+                emp_id: null,
+                items: [{ product_id: null, quantity: 1 }],
+            });
+
+            const purchaseForm = ref({
+                supplier_id: null,
+                emp_id: null,
+                items: [{ product_id: null, quantity: 1, unit_cost: '' }],
+            });
+
+            const auditProductId = ref(null);
+            const auditProduct = ref(null);
+            const auditLedger = ref([]);
+
+            const _bizLog = (text) => {
+                const t = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+                bizLogs.value.push(`[${t}] ${text}`);
+            };
+
+            const _findName = (arr, id, fallback = '') => {
+                const x = (arr || []).find(o => Number(o.id) === Number(id));
+                return x ? (x.display_name || x.name || fallback) : fallback;
+            };
+
+            const ledgerTypeText = (t) => {
+                const m = {
+                    init: '初始化入库',
+                    purchase: '进货入库',
+                    sale: '销售出库',
+                    cancel_sale: '撤销回补',
+                };
+                return m[t] || '库存变动';
+            };
+
+            const loadBizOptions = async () => {
+                try {
+                    const [cRes, eRes, sRes, pSaleRes, pAllRes] = await Promise.all([
+                        fetch('/api/options/customers?limit=200'),
+                        fetch('/api/options/employees?limit=200'),
+                        fetch('/api/options/suppliers?limit=200'),
+                        fetch('/api/options/products?active_only=1&limit=800'),
+                        fetch('/api/options/products?active_only=0&limit=800'),
+                    ]);
+                    const [c, e, s, pSale, pAll] = await Promise.all([cRes.json(), eRes.json(), sRes.json(), pSaleRes.json(), pAllRes.json()]);
+                    if (c.success) customersOptions.value = c.data || [];
+                    if (e.success) employeesOptions.value = e.data || [];
+                    if (s.success) suppliersOptions.value = s.data || [];
+                    if (pSale.success) productsSaleOptions.value = pSale.data || [];
+                    if (pAll.success) productsAllOptions.value = pAll.data || [];
+
+                    // 默认选择：尽量让页面打开就可用
+                    if (!orderForm.value.customer_id && customersOptions.value.length) orderForm.value.customer_id = customersOptions.value[0].id;
+                    if (!orderForm.value.emp_id && employeesOptions.value.length) orderForm.value.emp_id = employeesOptions.value[0].id;
+                    if (!purchaseForm.value.supplier_id && suppliersOptions.value.length) purchaseForm.value.supplier_id = suppliersOptions.value[0].id;
+                    if (!purchaseForm.value.emp_id && employeesOptions.value.length) purchaseForm.value.emp_id = employeesOptions.value[0].id;
+                } catch (e) {
+                    // 不提示技术细节，只给用户可理解的信息
+                    Toast.fire({ icon: 'warning', title: '基础数据加载失败，请刷新重试' });
+                }
+            };
+
+            const addOrderItem = () => orderForm.value.items.push({ product_id: null, quantity: 1 });
+            const removeOrderItem = (idx) => {
+                if (orderForm.value.items.length <= 1) return;
+                orderForm.value.items.splice(idx, 1);
+            };
+
+            const addPurchaseItem = () => purchaseForm.value.items.push({ product_id: null, quantity: 1, unit_cost: '' });
+            const removePurchaseItem = (idx) => {
+                if (purchaseForm.value.items.length <= 1) return;
+                purchaseForm.value.items.splice(idx, 1);
+            };
+
+            const createOrderBiz = async () => {
+                bizWorking.value = true;
+                try {
+                    const payload = {
+                        customer_id: Number(orderForm.value.customer_id),
+                        emp_id: Number(orderForm.value.emp_id),
+                        items: (orderForm.value.items || []).map(it => ({
+                            product_id: Number(it.product_id),
+                            quantity: Number(it.quantity),
+                        })),
+                    };
+
+                    // 基础校验：不暴露ID，只提示业务错误
+                    if (!payload.customer_id || !payload.emp_id) {
+                        ModernAlert.fire('提示', '请先选择顾客与收银员', 'warning');
+                        return;
+                    }
+                    if (!payload.items.length || payload.items.some(x => !x.product_id || !Number.isFinite(x.quantity) || x.quantity <= 0)) {
+                        ModernAlert.fire('提示', '请完善商品明细：选择商品并填写数量', 'warning');
+                        return;
+                    }
+
+                    const res = await fetch('/api/orders', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                        const oid = json.data?.order_id;
+                        const amt = json.data?.total_amount ?? 0;
+                        lastOrder.value = { order_id: oid, total_amount: amt, time: new Date().toLocaleString('zh-CN') };
+                        _bizLog(`✅ 开单成功：顾客 ${_findName(customersOptions.value, payload.customer_id)}，合计 ￥${Number(amt).toFixed(2)}`);
+                        Toast.fire({ icon: 'success', title: '开单成功' });
+
+                        // 清空明细，保留选人
+                        orderForm.value.items = [{ product_id: null, quantity: 1 }];
+                    } else {
+                        _bizLog(`❌ 开单失败：${json.message}`);
+                        ModernAlert.fire('下单失败', json.message, 'error');
+                    }
+                } catch (e) {
+                    _bizLog('❌ 开单失败：请稍后重试');
+                    ModernAlert.fire('开单失败', '系统繁忙，请稍后重试', 'error');
+                } finally {
+                    bizWorking.value = false;
+                }
+            };
+
+            const cancelLastOrderBiz = async () => {
+                if (!lastOrder.value?.order_id) {
+                    ModernAlert.fire('提示', '当前没有可撤销的订单', 'info');
+                    return;
+                }
+                const oid = Number(lastOrder.value.order_id);
+                bizWorking.value = true;
+                try {
+                    const r = await ModernAlert.fire({
+                        icon: 'warning',
+                        title: '确认撤销本单？',
+                        html: '撤销后将自动回补库存，并保留库存流水记录。',
+                        showCancelButton: true,
+                        confirmButtonText: '确认撤销',
+                        cancelButtonText: '取消',
+                    });
+                    if (!r.isConfirmed) {
+                        bizWorking.value = false;
+                        return;
+                    }
+
+                    const res = await fetch(`/api/orders/${oid}`, { method: 'DELETE' });
+                    const json = await res.json();
+                    if (json.success) {
+                        _bizLog('✅ 撤销成功：库存已回补');
+                        lastOrder.value = null;
+                        Toast.fire({ icon: 'success', title: '撤销成功' });
+                    } else {
+                        _bizLog(`❌ 撤销失败：${json.message}`);
+                        ModernAlert.fire('撤销失败', json.message, 'error');
+                    }
+                } catch (e) {
+                    _bizLog('❌ 撤销失败：请稍后重试');
+                    ModernAlert.fire('撤销失败', '系统繁忙，请稍后重试', 'error');
+                } finally {
+                    bizWorking.value = false;
+                }
+            };
+
+            const createPurchaseBiz = async () => {
+                bizWorking.value = true;
+                try {
+                    const payload = {
+                        supplier_id: Number(purchaseForm.value.supplier_id),
+                        emp_id: Number(purchaseForm.value.emp_id),
+                        items: (purchaseForm.value.items || []).map(it => ({
+                            product_id: Number(it.product_id),
+                            quantity: Number(it.quantity),
+                            unit_cost: Number(it.unit_cost),
+                        })),
+                    };
+
+                    if (!payload.supplier_id || !payload.emp_id) {
+                        ModernAlert.fire('提示', '请先选择供应商与经办人', 'warning');
+                        return;
+                    }
+                    if (!payload.items.length || payload.items.some(x => !x.product_id || !Number.isFinite(x.quantity) || x.quantity <= 0 || !Number.isFinite(x.unit_cost) || x.unit_cost < 0)) {
+                        ModernAlert.fire('提示', '请完善入库明细：选择商品、填写数量与单位成本', 'warning');
+                        return;
+                    }
+
+                    const res = await fetch('/api/purchases', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                        const cost = json.data?.total_cost ?? 0;
+                        _bizLog(`✅ 入库成功：供应商 ${_findName(suppliersOptions.value, payload.supplier_id)}，合计 ￥${Number(cost).toFixed(2)}`);
+                        Toast.fire({ icon: 'success', title: '入库成功' });
+
+                        purchaseForm.value.items = [{ product_id: null, quantity: 1, unit_cost: '' }];
+                    } else {
+                        _bizLog(`❌ 入库失败：${json.message}`);
+                        ModernAlert.fire('入库失败', json.message, 'error');
+                    }
+                } catch (e) {
+                    _bizLog('❌ 入库失败：请稍后重试');
+                    ModernAlert.fire('入库失败', '系统繁忙，请稍后重试', 'error');
+                } finally {
+                    bizWorking.value = false;
+                }
+            };
+
+            const auditProductAndLedger = async () => {
+                const pid = Number(auditProductId.value);
+                if (!Number.isFinite(pid) || pid <= 0) {
+                    ModernAlert.fire('提示', '请选择要查询的商品', 'warning');
+                    return;
+                }
+                bizWorking.value = true;
+                auditProduct.value = null;
+                auditLedger.value = [];
+                try {
+                    const r1 = await fetch(`/api/products/${pid}`);
+                    const j1 = await r1.json();
+                    if (!j1.success) {
+                        ModernAlert.fire('查询失败', j1.message, 'error');
+                        _bizLog(`❌ 商品查询失败：${j1.message}`);
+                        return;
+                    }
+                    auditProduct.value = j1.data;
+
+                    const r2 = await fetch(`/api/stock_ledger?product_id=${pid}&limit=20`);
+                    const j2 = await r2.json();
+                    if (j2.success) {
+                        auditLedger.value = j2.data || [];
+                        _bizLog(`✅ 已查询：${auditProduct.value.product_name}`);
+                    } else {
+                        _bizLog(`⚠️ 流水查询失败：${j2.message}`);
+                        auditLedger.value = [];
+                    }
+                } catch (e) {
+                    _bizLog('❌ 查询失败：请稍后重试');
+                } finally {
+                    bizWorking.value = false;
+                }
+            };
+
+            const executeDynamicQuery = async () => {
+                dynamicQuerying.value = true;
+                try {
+                    const res = await fetch('/api/dynamic_query', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(dynamicForm.value)
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                        dynamicResults.value = json.data;
+                        generatedSql.value = json.sql;
+                        Toast.fire({ icon: 'success', title: '查询成功' });
+                    } else {
+                        ModernAlert.fire('查询失败', json.message, 'error');
+                        generatedSql.value = json.sql || '生成失败';
+                    }
+                } catch (e) {
+                    ModernAlert.fire('网络错误', '无法连接到服务器', 'error');
+                } finally {
+                    dynamicQuerying.value = false;
+                }
+            };
+
+            const fetchProducts = async () => {
+                loading.value = true;
+                try {
+                    const offset = (page.value - 1) * pageSize.value;
+                    const url = `/api/products/paged?limit=${pageSize.value}&offset=${offset}&sort_by=${sortBy.value}&sort_order=${sortOrder.value}`;
+                    const res = await fetch(url);
+                    const json = await res.json();
+                    if (json.success) {
+                        products.value = json.data.items;
+                        total.value = json.data.total;
+                        Toast.fire({ icon: 'success', title: '数据已刷新' });
+                    } else {
+                        ModernAlert.fire('获取失败', json.message, 'error');
+                    }
+                } catch (e) {
+                    ModernAlert.fire('网络错误', '无法连接到服务器', 'error');
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            const onPageChange = (p) => {
+                page.value = p;
+                fetchProducts();
+            };
+
+            const onPageSizeChange = (s) => {
+                pageSize.value = Number(s);
+                page.value = 1;
+                fetchProducts();
+            };
+
+            const onSortChange = () => {
+                page.value = 1;
+                fetchProducts();
+            };
+
+            // =========================
+            // 数据看板：加载统计 + 渲染图表（ECharts）
+            // =========================
+            const dashboardStats = ref(null);
+            const memberTop = ref([]);
+            let _chartSalesProfit = null;
+            let _chartSoldQty = null;
+            let _chartStockCategory = null;
+
+            const formatYAxisCN = (val) => {
+                const n = Number(val);
+                if (!Number.isFinite(n)) return String(val);
+                const abs = Math.abs(n);
+                if (abs >= 1e8) return (n / 1e8).toFixed(1).replace(/\.0$/, '') + '亿';
+                if (abs >= 1e4) return (n / 1e4).toFixed(1).replace(/\.0$/, '') + '万';
+                return String(Math.round(n));
+            };
+
+            const _renderDashboardCharts = () => {
+                if (!dashboardStats.value || typeof echarts === 'undefined') return;
+
+                const salesTrend = dashboardStats.value.sales_trend_daily_14d || [];
+                const stockBalanceTrend = dashboardStats.value.stock_balance_trend_daily_14d || [];
+                const stockByCat = dashboardStats.value.stock_by_category || [];
+
+                // 1) 销售额/利润折线图
+                const el1 = document.getElementById('chart_sales_profit');
+                if (el1) {
+                    _chartSalesProfit = _chartSalesProfit || echarts.init(el1);
+                    _chartSalesProfit.setOption({
+                        tooltip: { trigger: 'axis' },
+                        legend: { data: ['销售额', '利润'] },
+                        grid: { left: 72, right: 18, top: 40, bottom: 30, containLabel: true },
+                        xAxis: { type: 'category', data: salesTrend.map(r => r.d) },
+                        yAxis: { type: 'value', axisLabel: { formatter: formatYAxisCN, margin: 10 } },
+                        series: [
+                            { name: '销售额', type: 'line', smooth: true, data: salesTrend.map(r => r.sales_amount), areaStyle: { opacity: 0.08 } },
+                            { name: '利润', type: 'line', smooth: true, data: salesTrend.map(r => r.profit_amount), areaStyle: { opacity: 0.05 } },
+                        ],
+                    });
+                }
+
+                // 2) 库存余额折线图
+                const el2 = document.getElementById('chart_sold_qty');
+                if (el2) {
+                    _chartSoldQty = _chartSoldQty || echarts.init(el2);
+                    _chartSoldQty.setOption({
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: 72, right: 18, top: 26, bottom: 30, containLabel: true },
+                        xAxis: { type: 'category', data: stockBalanceTrend.map(r => r.d) },
+                        yAxis: { type: 'value', axisLabel: { formatter: formatYAxisCN, margin: 10 } },
+                        series: [
+                            { name: '库存余额', type: 'line', smooth: true, data: stockBalanceTrend.map(r => r.stock_balance), areaStyle: { opacity: 0.08 } },
+                        ],
+                    });
+                }
+
+                // 3) 当前库存按类别（柱状图）
+                const el3 = document.getElementById('chart_stock_category');
+                if (el3) {
+                    _chartStockCategory = _chartStockCategory || echarts.init(el3);
+                    _chartStockCategory.setOption({
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: 72, right: 18, top: 26, bottom: 70, containLabel: true },
+                        xAxis: {
+                            type: 'category',
+                            data: stockByCat.map(r => r.category_name),
+                            axisLabel: { rotate: 35 },
+                        },
+                        yAxis: { type: 'value', axisLabel: { formatter: formatYAxisCN, margin: 10 } },
+                        series: [
+                            { name: '库存', type: 'bar', data: stockByCat.map(r => r.stock_sum) },
+                        ],
+                    });
+                }
+
+                // resize 兜底（避免切换 Tab 后尺寸不正确）
+                setTimeout(() => {
+                    try { _chartSalesProfit && _chartSalesProfit.resize(); } catch {}
+                    try { _chartSoldQty && _chartSoldQty.resize(); } catch {}
+                    try { _chartStockCategory && _chartStockCategory.resize(); } catch {}
+                }, 0);
+            };
+
+            const loadDashboardStats = async () => {
+                try {
+                    const res = await fetch('/api/stats/overview');
+                    const json = await res.json();
+                    if (json.success) {
+                        dashboardStats.value = json.data;
+                        await nextTick();
+                        _renderDashboardCharts();
+                        // 顺带刷新会员排行（经营看板常用模块）
+                        loadMemberTop();
+                    } else {
+                        ModernAlert.fire('加载失败', json.message, 'error');
+                    }
+                } catch (e) {
+                    ModernAlert.fire('网络错误', '无法连接到服务器', 'error');
+                }
+            };
+
+            const loadMemberTop = async () => {
+                try {
+                    const res = await fetch('/api/queries/member_spend_top');
+                    const json = await res.json();
+                    if (json.success) {
+                        memberTop.value = json.data || [];
+                    } else {
+                        memberTop.value = [];
+                    }
+                } catch {
+                    memberTop.value = [];
+                }
+            };
+
+            watch(currentTab, async (v) => {
+                if (v === 'query') {
+                    await loadDashboardStats();
+                }
+            });
+
+            const submitProduct = async () => {
+                submitting.value = true;
+                try {
+                    const res = await fetch('/api/products', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(form.value)
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                        ModernAlert.fire({
+                            icon: 'success',
+                            title: '成功录入',
+                            text: '商品已保存到数据库！',
+                        });
+                        // Reset form
+                        form.value = { name: '', barcode: '', category_id: 1, price: '', stock: '' };
+                        // Switch back to list to see it
+                        currentTab.value = 'list';
+                        fetchProducts();
+                    } else {
+                        // Constraint violations will show up here
+                        ModernAlert.fire({
+                            icon: 'warning',
+                            title: '数据库拦截',
+                            html: json.message
+                        });
+                    }
+                } catch (e) {
+                    ModernAlert.fire('错误', '请求提交失败', 'error');
+                } finally {
+                    submitting.value = false;
+                }
+            };
+
+            const fetchComplexQuery = async () => {
+                querying.value = true;
+                try {
+                    const res = await fetch('/api/complex_query');
+                    const json = await res.json();
+                    if (json.success) {
+                        queryData.value = json.data;
+                        Toast.fire({ icon: 'success', title: '聚合查询完成' });
+                    } else {
+                        ModernAlert.fire('查询失败', json.message, 'error');
+                    }
+                } catch (e) {
+                    ModernAlert.fire('网络错误', '无法连接到服务器', 'error');
+                } finally {
+                    querying.value = false;
+                }
+            };
+
+            const runIndexTest = async () => {
+                testingIndex.value = true;
+                indexLogs.value = ['> 发送性能分析请求至后端服务器...'];
+                try {
+                    const res = await fetch('/api/test_index');
+                    const json = await res.json();
+                    if (json.success) {
+                        // Typewriter effect for logs
+                        let i = 0;
+                        const interval = setInterval(() => {
+                            if (i < json.logs.length) {
+                                indexLogs.value.push('> ' + json.logs[i]);
+                                i++;
+                            } else {
+                                clearInterval(interval);
+                                testingIndex.value = false;
+                                Toast.fire({ icon: 'success', title: '测试完毕' });
+                            }
+                        }, 200);
+                    } else {
+                        indexLogs.value.push('❌ 测试失败: ' + json.message);
+                        testingIndex.value = false;
+                    }
+                } catch (e) {
+                    indexLogs.value.push('❌ 网络错误');
+                    testingIndex.value = false;
+                }
+            };
+
+            const formatLog = (text) => {
+                if(text.includes('结论')) return `<span class="text-yellow-400 font-bold">${text}</span>`;
+                if(text.includes('耗时')) return `<span class="text-emerald-200">${text}</span>`;
+                if(text.includes('无索引')) return `<span class="text-rose-400">${text}</span>`;
+                if(text.includes('有索引')) return `<span class="text-cyan-400">${text}</span>`;
+                if(text.includes('====')) return `<span class="text-slate-500">${text}</span>`;
+                return text;
+            };
+
+            const formatBizLog = (text) => {
+                if(text.includes('✅')) return `<span class="text-emerald-300">${text}</span>`;
+                if(text.includes('❌')) return `<span class="text-rose-300">${text}</span>`;
+                if(text.includes('⚠️')) return `<span class="text-yellow-300">${text}</span>`;
+                if(text.includes('撤销')) return `<span class="text-cyan-300">${text}</span>`;
+                return text;
+            };
+
+            const openEdit = async (p) => {
+                const html = `
+                    <div class="text-left space-y-3">
+                        <div>
+                            <div class="text-xs font-bold text-slate-500 mb-1">商品名称</div>
+                            <input id="e_name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2" value="${p.product_name ?? ''}">
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-500 mb-1">条形码</div>
+                            <input id="e_barcode" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2" value="${p.barcode ?? ''}">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <div class="text-xs font-bold text-slate-500 mb-1">类别ID</div>
+                                <input id="e_category" type="number" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2" value="${p.category_id ?? ''}">
+                            </div>
+                            <div>
+                                <div class="text-xs font-bold text-slate-500 mb-1">状态</div>
+                                <select id="e_status" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                                    <option value="在售" ${p.status === '在售' ? 'selected' : ''}>在售</option>
+                                    <option value="停售" ${p.status === '停售' ? 'selected' : ''}>停售</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <div class="text-xs font-bold text-slate-500 mb-1">价格</div>
+                                <input id="e_price" type="number" step="0.01" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2" value="${Number(p.price ?? 0)}">
+                            </div>
+                            <div>
+                                <div class="text-xs font-bold text-slate-500 mb-1">库存</div>
+                                <input id="e_stock" type="number" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2" value="${Number(p.stock_quantity ?? 0)}">
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const r = await ModernAlert.fire({
+                    icon: 'info',
+                    title: '编辑商品',
+                    html,
+                    showCancelButton: true,
+                    confirmButtonText: '保存',
+                    cancelButtonText: '取消',
+                    focusConfirm: false,
+                    preConfirm: () => {
+                        const name = document.getElementById('e_name').value.trim();
+                        const barcode = document.getElementById('e_barcode').value.trim();
+                        const category_id = Number(document.getElementById('e_category').value);
+                        const status = document.getElementById('e_status').value;
+                        const price = Number(document.getElementById('e_price').value);
+                        const stock_quantity = Number(document.getElementById('e_stock').value);
+
+                        if (!name || !barcode) {
+                            Swal.showValidationMessage('名称和条形码不能为空');
+                            return;
+                        }
+                        if (!Number.isFinite(category_id)) {
+                            Swal.showValidationMessage('类别ID必须是数字');
+                            return;
+                        }
+                        if (!Number.isFinite(price) || !Number.isFinite(stock_quantity)) {
+                            Swal.showValidationMessage('价格/库存必须是数字');
+                            return;
+                        }
+                        return { name, barcode, category_id, status, price, stock_quantity };
+                    }
+                });
+
+                if (!r.isConfirmed) return;
+
+                try {
+                    const res = await fetch(`/api/products/${p.product_id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(r.value)
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                        Toast.fire({ icon: 'success', title: '更新成功' });
+                        fetchProducts();
+                    } else {
+                        ModernAlert.fire({ icon: 'warning', title: '更新失败', html: json.message });
+                    }
+                } catch (e) {
+                    ModernAlert.fire('网络错误', '无法连接到服务器', 'error');
+                }
+            };
+
+            const confirmDelete = async (p) => {
+                const r = await ModernAlert.fire({
+                    icon: 'warning',
+                    title: '确认删除？',
+                    html: `将删除商品：<b>${p.product_name}</b><br>条形码：${p.barcode}<br><span class="text-rose-500">该操作不可撤销</span>`,
+                    showCancelButton: true,
+                    confirmButtonText: '删除',
+                    cancelButtonText: '取消',
+                });
+                if (!r.isConfirmed) return;
+
+                try {
+                    const res = await fetch(`/api/products/${p.product_id}`, { method: 'DELETE' });
+                    const json = await res.json();
+                    if (json.success) {
+                        Toast.fire({ icon: 'success', title: '已删除' });
+                        fetchProducts();
+                    } else {
+                        ModernAlert.fire({ icon: 'error', title: '删除失败', html: json.message });
+                    }
+                } catch (e) {
+                    ModernAlert.fire('网络错误', '无法连接到服务器', 'error');
+                }
+            };
+
+            // Init fetch
+            onMounted(() => {
+                fetchProducts();
+                loadBizOptions();
+            });
+
+            return {
+                tabs, currentTab,
+                products, loading, fetchProducts,
+                page, pageSize, total, sortBy, sortOrder,
+                onPageChange, onPageSizeChange, onSortChange,
+                form, submitting, submitProduct,
+                categoryOptions,
+                queryData, querying, fetchComplexQuery,
+                indexLogs, testingIndex, runIndexTest, formatLog,
+                dynamicForm, dynamicResults, generatedSql, dynamicQuerying, executeDynamicQuery,
+                bizLogs, bizWorking,
+                customersOptions, employeesOptions, suppliersOptions, productsSaleOptions, productsAllOptions,
+                lastOrder,
+                orderForm, purchaseForm,
+                auditProductId, auditProduct, auditLedger,
+                addOrderItem, removeOrderItem, addPurchaseItem, removePurchaseItem,
+                createOrderBiz, cancelLastOrderBiz, createPurchaseBiz, auditProductAndLedger,
+                ledgerTypeText, formatBizLog,
+                openEdit, confirmDelete,
+                loadDashboardStats,
+                memberTop, loadMemberTop
+            }
+        }
+    });
+    
+    appInstance.use(ElementPlus);
+    appInstance.mount('#app');
+</script>
+{% endraw %}
+</body>
+</html>
