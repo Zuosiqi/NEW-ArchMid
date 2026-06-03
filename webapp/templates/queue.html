@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}队列监控 - 简易消息中间件{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>📊 队列监控</h2>
+
+    <!-- 创建队列 -->
+    <div style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 10px;">创建队列</h3>
+        <div class="inline-form">
+            <div class="form-group">
+                <label>队列名称</label>
+                <input type="text" id="queueName" placeholder="例如: order-queue">
+            </div>
+            <div class="form-group">
+                <label>最大容量</label>
+                <input type="number" id="queueMaxSize" value="10000">
+            </div>
+            <button class="btn btn-primary" onclick="createQueue()">创建队列</button>
+        </div>
+    </div>
+
+    <!-- 队列列表 -->
+    <div>
+        <h3 style="margin-bottom: 10px;">当前队列</h3>
+        <div id="queueList">
+            {% if queue_data %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>队列名称</th>
+                        <th>当前大小</th>
+                        <th>最大容量</th>
+                        <th>已入队</th>
+                        <th>已出队</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for name, data in queue_data.items() %}
+                    <tr>
+                        <td><strong>{{ name }}</strong></td>
+                        <td>{{ data.stats.current_size }}</td>
+                        <td>{{ data.stats.max_size }}</td>
+                        <td>{{ data.stats.total_enqueued }}</td>
+                        <td>{{ data.stats.total_dequeued }}</td>
+                        <td>
+                            {% if data.stats.is_full %}
+                            <span style="color: #eb3349;">已满</span>
+                            {% elif data.stats.is_empty %}
+                            <span style="color: #888;">空</span>
+                            {% else %}
+                            <span style="color: #11998e;">正常</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="color: #888;">暂无队列，请先创建一个。</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if queue_data %}
+{% for name, data in queue_data.items() %}
+<div class="card">
+    <h2>📬 队列 "{{ name }}" 消息内容</h2>
+    <div style="margin-bottom: 10px;">
+        <span>当前消息数: {{ data.stats.current_size }}</span>
+        <button class="btn btn-primary" onclick="refreshQueue('{{ name }}')" style="float: right;">刷新</button>
+    </div>
+    <div id="queue-{{ name }}" class="message-list">
+        {% if data.messages %}
+            {% for msg in data.messages %}
+            <div class="message-item">
+                <span class="topic">[{{ msg.topic }}]</span>
+                <div class="payload">{{ msg.payload }}</div>
+                <div class="meta">
+                    ID: {{ msg.id[:8] }}... |
+                    生产者: {{ msg.producer_id or '未知' }} |
+                    时间: <span class="timestamp-display" data-ts="{{ msg.timestamp }}"></span>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p style="color: #888; text-align: center; padding: 20px;">队列为空</p>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="card">
+    <h2>📈 系统统计</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>{{ stats.total_queues }}</h3>
+            <p>队列总数</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.total_topics }}</h3>
+            <p>主题总数</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.total_messages_sent }}</h3>
+            <p>已发送消息</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.total_messages_received }}</h3>
+            <p>已接收消息</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 渲染所有时间戳
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.timestamp-display').forEach(el => {
+            const ts = parseFloat(el.dataset.ts);
+            if (ts) {
+                el.textContent = formatTimestamp(ts);
+            }
+        });
+    });
+
+    async function createQueue() {
+        const name = document.getElementById('queueName').value.trim();
+        const maxSize = parseInt(document.getElementById('queueMaxSize').value) || 10000;
+
+        if (!name) {
+            showAlert('请输入队列名称', 'error');
+            return;
+        }
+
+        const result = await apiCall('/api/queue/create', 'POST', { name, max_size: maxSize });
+        if (result.success) {
+            showAlert(`队列 "${name}" 创建成功`);
+            location.reload();
+        } else {
+            showAlert(result.error || '创建失败', 'error');
+        }
+    }
+
+    async function refreshQueue(name) {
+        const result = await apiCall(`/api/queue/${name}/messages?limit=50`);
+        const container = document.getElementById(`queue-${name}`);
+
+        if (result.success && result.messages.length > 0) {
+            container.innerHTML = result.messages.map(msg => `
+                <div class="message-item">
+                    <span class="topic">[${msg.topic}]</span>
+                    <div class="payload">${JSON.stringify(msg.payload)}</div>
+                    <div class="meta">
+                        ID: ${msg.id.substring(0, 8)}... |
+                        生产者: ${msg.producer_id || '未知'} |
+                        时间: ${formatTimestamp(msg.timestamp)}
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">队列为空</p>';
+        }
+    }
+
+    // 自动刷新
+    setInterval(() => {
+        // 可以在这里添加自动刷新逻辑
+    }, 5000);
+</script>
+{% endblock %}

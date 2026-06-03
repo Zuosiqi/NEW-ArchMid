@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}消费者 - 简易消息中间件{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>📥 消费者管理</h2>
+
+    <!-- 创建消费者 -->
+    <div style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 10px;">创建消费者</h3>
+        <div class="inline-form">
+            <div class="form-group">
+                <label>消费者ID（可选）</label>
+                <input type="text" id="consumerId" placeholder="留空自动生成">
+            </div>
+            <button class="btn btn-primary" onclick="createConsumer()">创建消费者</button>
+        </div>
+    </div>
+
+    <!-- 已创建的消费者列表 -->
+    <div>
+        <h3 style="margin-bottom: 10px;">已创建的消费者</h3>
+        <div id="consumerList" style="min-height: 50px;">
+            {% if consumers %}
+                {% for cid, c in consumers.items() %}
+                <div class="message-item">
+                    <strong>{{ cid }}</strong>
+                    <span style="float: right; color: #888;">
+                        已接收: {{ c.messages_received }} 条
+                        {% if c.subscriptions %} | 订阅: {{ c.subscriptions|join(', ') }}{% endif %}
+                    </span>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: #888;">暂无消费者，请先创建一个。</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <!-- 订阅主题 -->
+    <div class="card">
+        <h2>📡 订阅主题（发布/订阅模式）</h2>
+        <div class="form-group">
+            <label>选择消费者</label>
+            <select id="selectConsumerSub">
+                {% for cid in consumers.keys() %}
+                <option value="{{ cid }}">{{ cid }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>主题名称</label>
+            <input type="text" id="subscribeTopic" placeholder="例如: order-events">
+        </div>
+        <button class="btn btn-success" onclick="subscribeTopic()">订阅主题</button>
+        <p style="margin-top: 10px; color: #888; font-size: 0.9em;">
+            订阅后，该主题发布的所有消息都会自动推送给此消费者。
+        </p>
+    </div>
+
+    <!-- 从队列拉取消息 -->
+    <div class="card">
+        <h2>📬 从队列拉取（点对点模式）</h2>
+        <div class="form-group">
+            <label>选择消费者</label>
+            <select id="selectConsumerPoll">
+                {% for cid in consumers.keys() %}
+                <option value="{{ cid }}">{{ cid }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>队列名称</label>
+            <input type="text" id="pollQueue" placeholder="例如: order-queue" value="default">
+        </div>
+        <button class="btn btn-primary" onclick="pollMessage()">拉取消息</button>
+        <p style="margin-top: 10px; color: #888; font-size: 0.9em;">
+            点击按钮从队列中取出一条消息（FIFO顺序）。
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>📨 接收的消息</h2>
+    <div style="margin-bottom: 10px;">
+        <select id="selectConsumerView" onchange="loadMessages()">
+            {% for cid in consumers.keys() %}
+            <option value="{{ cid }}">{{ cid }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn btn-primary" onclick="loadMessages()" style="margin-left: 10px;">刷新</button>
+    </div>
+    <div id="messageList" class="message-list">
+        <p style="color: #888; text-align: center; padding: 20px;">暂无消息</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- 通过data属性传递Jinja2数据，避免IDE误报 -->
+<div id="jinjaData" style="display:none;" data-consumers='{{ consumers.keys()|list|tojson }}'></div>
+<script>
+    let currentConsumers = {};
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const jinjaData = document.getElementById('jinjaData');
+        const consumerList = JSON.parse(jinjaData.dataset.consumers || '[]');
+        consumerList.forEach(cid => {
+            currentConsumers[cid] = true;
+        });
+    });
+
+    async function createConsumer() {
+        const id = document.getElementById('consumerId').value.trim();
+        const data = id ? { id } : {};
+
+        const result = await apiCall('/api/consumer/create', 'POST', data);
+        if (result.success) {
+            currentConsumers[result.consumer_id] = true;
+            updateConsumerSelects();
+            document.getElementById('consumerId').value = '';
+            showAlert(`消费者 ${result.consumer_id} 创建成功`);
+        } else {
+            showAlert(result.error || '创建失败', 'error');
+        }
+    }
+
+    function updateConsumerSelects() {
+        const options = Object.keys(currentConsumers).map(cid =>
+            `<option value="${cid}">${cid}</option>`
+        ).join('');
+
+        document.getElementById('selectConsumerSub').innerHTML = options;
+        document.getElementById('selectConsumerPoll').innerHTML = options;
+        document.getElementById('selectConsumerView').innerHTML = options;
+
+        // 更新列表
+        const list = document.getElementById('consumerList');
+        if (Object.keys(currentConsumers).length === 0) {
+            list.innerHTML = '<p style="color: #888;">暂无消费者，请先创建一个。</p>';
+        } else {
+            list.innerHTML = Object.keys(currentConsumers).map(cid => `
+                <div class="message-item">
+                    <strong>${cid}</strong>
+                </div>
+            `).join('');
+        }
+    }
+
+    async function subscribeTopic() {
+        const consumerId = document.getElementById('selectConsumerSub').value;
+        const topic = document.getElementById('subscribeTopic').value.trim();
+
+        if (!consumerId) {
+            showAlert('请先创建一个消费者', 'error');
+            return;
+        }
+        if (!topic) {
+            showAlert('请输入主题名称', 'error');
+            return;
+        }
+
+        const result = await apiCall('/api/consumer/subscribe', 'POST', {
+            consumer_id: consumerId,
+            topic,
+        });
+
+        if (result.success) {
+            showAlert(`已订阅主题 "${topic}"`);
+            loadMessages();
+        } else {
+            showAlert(result.error || '订阅失败', 'error');
+        }
+    }
+
+    async function pollMessage() {
+        const consumerId = document.getElementById('selectConsumerPoll').value;
+        const queue = document.getElementById('pollQueue').value.trim();
+
+        if (!consumerId) {
+            showAlert('请先创建一个消费者', 'error');
+            return;
+        }
+
+        const result = await apiCall('/api/consumer/poll', 'POST', {
+            consumer_id: consumerId,
+            queue,
+        });
+
+        if (result.success) {
+            if (result.message) {
+                showAlert('成功拉取一条消息');
+                loadMessages();
+            } else {
+                showAlert('队列为空，没有消息', 'error');
+            }
+        } else {
+            showAlert(result.error || '拉取失败', 'error');
+        }
+    }
+
+    async function loadMessages() {
+        const consumerId = document.getElementById('selectConsumerView').value;
+        if (!consumerId) return;
+
+        const result = await apiCall(`/api/consumer/messages/${consumerId}?limit=50`);
+        const list = document.getElementById('messageList');
+
+        if (result.success && result.messages.length > 0) {
+            list.innerHTML = result.messages.map(msg => `
+                <div class="message-item">
+                    <span class="topic">[${msg.topic}]</span>
+                    <div class="payload">${JSON.stringify(msg.payload)}</div>
+                    <div class="meta">
+                        ID: ${msg.id.substring(0, 8)}... |
+                        生产者: ${msg.producer_id || '未知'} |
+                        时间: ${formatTimestamp(msg.timestamp)}
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            list.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">暂无消息</p>';
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}生产者 - 简易消息中间件{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>📤 生产者管理</h2>
+
+    <!-- 创建生产者 -->
+    <div style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 10px;">创建生产者</h3>
+        <div class="inline-form">
+            <div class="form-group">
+                <label>生产者ID（可选）</label>
+                <input type="text" id="producerId" placeholder="留空自动生成">
+            </div>
+            <button class="btn btn-primary" onclick="createProducer()">创建生产者</button>
+        </div>
+    </div>
+
+    <!-- 已创建的生产者列表 -->
+    <div>
+        <h3 style="margin-bottom: 10px;">已创建的生产者</h3>
+        <div id="producerList" style="min-height: 50px;">
+            {% if producers %}
+                {% for pid, p in producers.items() %}
+                <div class="message-item">
+                    <strong>{{ pid }}</strong>
+                    <span style="float: right; color: #888;">已发送: {{ p.messages_sent }} 条</span>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: #888;">暂无生产者，请先创建一个。</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>📨 发送消息</h2>
+    <div class="form-group">
+        <label>选择生产者</label>
+        <select id="selectProducer">
+            {% for pid in producers.keys() %}
+            <option value="{{ pid }}">{{ pid }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <label>发送模式</label>
+        <select id="sendMode" onchange="updateModeHelp()">
+            <option value="queue">点对点模式（队列）</option>
+            <option value="topic">发布/订阅模式（主题）</option>
+        </select>
+        <small id="modeHelp" style="color: #888;">消息将发送到指定队列，由单个消费者处理</small>
+    </div>
+    <div class="form-group">
+        <label>目标队列/主题</label>
+        <input type="text" id="destination" placeholder="例如: order-queue 或 order-events" value="default">
+    </div>
+    <div class="form-group">
+        <label>消息内容</label>
+        <textarea id="messagePayload" rows="4" placeholder="输入消息内容（支持JSON格式）">{"message": "Hello, World!"}</textarea>
+    </div>
+    <button class="btn btn-success" onclick="sendMessage()">发送消息</button>
+</div>
+
+<div class="card">
+    <h2>📝 发送日志</h2>
+    <div id="sendLog" class="log-area">
+        <div class="log-entry"><span class="timestamp">[系统]</span> <span class="info">等待发送消息...</span></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- 通过data属性传递Jinja2数据，避免IDE误报 -->
+<div id="jinjaData" style="display:none;" data-producers='{{ producers.keys()|list|tojson }}'></div>
+<script>
+    let currentProducers = {};
+
+    // 初始化 - 从data属性读取数据
+    document.addEventListener('DOMContentLoaded', () => {
+        const jinjaData = document.getElementById('jinjaData');
+        const producerList = JSON.parse(jinjaData.dataset.producers || '[]');
+        producerList.forEach(pid => {
+            currentProducers[pid] = true;
+        });
+    });
+
+    function updateModeHelp() {
+        const mode = document.getElementById('sendMode').value;
+        const help = document.getElementById('modeHelp');
+        if (mode === 'queue') {
+            help.textContent = '消息将发送到指定队列，由单个消费者处理';
+        } else {
+            help.textContent = '消息将发布到主题，所有订阅者都会收到';
+        }
+    }
+
+    async function createProducer() {
+        const id = document.getElementById('producerId').value.trim();
+        const data = id ? { id } : {};
+
+        const result = await apiCall('/api/producer/create', 'POST', data);
+        if (result.success) {
+            currentProducers[result.producer_id] = true;
+            updateProducerList();
+            updateProducerSelect();
+            document.getElementById('producerId').value = '';
+            showAlert(`生产者 ${result.producer_id} 创建成功`);
+            addLog(`生产者 ${result.producer_id} 已创建并连接`, 'info');
+        } else {
+            showAlert(result.error || '创建失败', 'error');
+        }
+    }
+
+    function updateProducerList() {
+        const list = document.getElementById('producerList');
+        if (Object.keys(currentProducers).length === 0) {
+            list.innerHTML = '<p style="color: #888;">暂无生产者，请先创建一个。</p>';
+        } else {
+            list.innerHTML = Object.keys(currentProducers).map(pid => `
+                <div class="message-item">
+                    <strong>${pid}</strong>
+                </div>
+            `).join('');
+        }
+    }
+
+    function updateProducerSelect() {
+        const select = document.getElementById('selectProducer');
+        select.innerHTML = Object.keys(currentProducers).map(pid =>
+            `<option value="${pid}">${pid}</option>`
+        ).join('');
+    }
+
+    async function sendMessage() {
+        const producerId = document.getElementById('selectProducer').value;
+        const mode = document.getElementById('sendMode').value;
+        const destination = document.getElementById('destination').value.trim();
+        const payloadStr = document.getElementById('messagePayload').value.trim();
+
+        if (!producerId) {
+            showAlert('请先创建一个生产者', 'error');
+            return;
+        }
+        if (!destination) {
+            showAlert('请输入目标队列/主题', 'error');
+            return;
+        }
+
+        let payload;
+        try {
+            payload = JSON.parse(payloadStr);
+        } catch (e) {
+            payload = payloadStr;
+        }
+
+        const result = await apiCall('/api/producer/send', 'POST', {
+            producer_id: producerId,
+            destination,
+            payload,
+            mode,
+        });
+
+        if (result.success) {
+            const modeText = mode === 'queue' ? '队列' : '主题';
+            addLog(`[${producerId}] 发送到${modeText} "${destination}": ${JSON.stringify(payload)}`, 'info');
+            showAlert('消息发送成功');
+        } else {
+            addLog(`发送失败: ${result.error}`, 'error');
+            showAlert(result.error || '发送失败', 'error');
+        }
+    }
+
+    function addLog(message, type = 'info') {
+        const log = document.getElementById('sendLog');
+        const timestamp = new Date().toLocaleTimeString('zh-CN');
+        log.innerHTML += `<div class="log-entry"><span class="timestamp">[${timestamp}]</span> <span class="${type}">${message}</span></div>`;
+        log.scrollTop = log.scrollHeight;
+    }
+</script>
+{% endblock %}

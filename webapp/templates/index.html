@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}首页 - 简易消息中间件{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>📊 系统概览</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>{{ stats.total_queues }}</h3>
+            <p>消息队列</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.total_topics }}</h3>
+            <p>主题</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.total_producers }}</h3>
+            <p>生产者</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.total_consumers }}</h3>
+            <p>消费者</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.total_messages_sent }}</h3>
+            <p>已发送消息</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.total_messages_received }}</h3>
+            <p>已接收消息</p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>🏗️ 系统架构</h2>
+    <div style="text-align: center; padding: 20px;">
+        <pre style="display: inline-block; text-align: left; font-family: 'Consolas', monospace; background: #f8f9fa; padding: 20px; border-radius: 8px;">
+┌─────────────────────────────────────────────────────────────────┐
+│                      简易消息中间件架构                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   ┌──────────┐      ┌──────────┐      ┌──────────┐            │
+│   │ 生产者1  │──┐   │ 生产者2  │──┐   │ 生产者N  │──┐         │
+│   └──────────┘  │   └──────────┘  │   └──────────┘  │         │
+│                 │                 │                 │         │
+│                 ▼                 ▼                 ▼         │
+│   ┌─────────────────────────────────────────────────────┐     │
+│   │                    消息代理 (Broker)                  │     │
+│   │  ┌─────────────────────────────────────────────┐   │     │
+│   │  │              主题管理器 (TopicManager)        │   │     │
+│   │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐   │   │     │
+│   │  │  │ 主题 A  │  │ 主题 B  │  │ 主题 C  │   │   │     │
+│   │  │  └────┬────┘  └────┬────┘  └────┬────┘   │   │     │
+│   │  │       │            │            │         │   │     │
+│   │  └───────┼────────────┼────────────┼─────────┘   │     │
+│   │          │            │            │             │     │
+│   │  ┌───────┼────────────┼────────────┼─────────┐   │     │
+│   │  │       ▼            ▼            ▼         │   │     │
+│   │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐   │   │     │
+│   │  │  │ 队列 A  │  │ 队列 B  │  │ 队列 C  │   │   │     │
+│   │  │  └─────────┘  └─────────┘  └─────────┘   │   │     │
+│   │  │              消息队列存储                    │   │     │
+│   │  └───────────────────────────────────────────┘   │     │
+│   └─────────────────────────────────────────────────┘     │
+│                 │                 │                 │         │
+│                 ▼                 ▼                 ▼         │
+│   ┌──────────┐      ┌──────────┐      ┌──────────┐            │
+│   │ 消费者1  │      │ 消费者2  │      │ 消费者N  │            │
+│   └──────────┘      └──────────┘      └──────────┘            │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+模式说明:
+  • 点对点模式: 生产者 → 队列 → 消费者 (一对一)
+  • 发布/订阅模式: 生产者 → 主题 → 多个订阅者 (一对多)
+        </pre>
+    </div>
+</div>
+
+<div class="card">
+    <h2>🚀 快速开始</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+            <h3 style="color: #667eea; margin-bottom: 10px;">1️⃣ 创建生产者</h3>
+            <p>访问 <a href="/producer" style="color: #667eea;">生产者页面</a>，创建一个生产者实例并发送消息。</p>
+        </div>
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+            <h3 style="color: #667eea; margin-bottom: 10px;">2️⃣ 创建消费者</h3>
+            <p>访问 <a href="/consumer" style="color: #667eea;">消费者页面</a>，创建消费者并订阅主题或从队列拉取消息。</p>
+        </div>
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+            <h3 style="color: #667eea; margin-bottom: 10px;">3️⃣ 监控队列</h3>
+            <p>访问 <a href="/queue" style="color: #667eea;">队列监控页面</a>，查看队列状态和消息内容。</p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>💡 功能特性</h2>
+    <ul style="list-style: none; padding: 0;">
+        <li style="padding: 10px 0; border-bottom: 1px solid #eee;">✅ <strong>点对点模式</strong> - 消息通过队列传递，保证单消费者处理</li>
+        <li style="padding: 10px 0; border-bottom: 1px solid #eee;">✅ <strong>发布/订阅模式</strong> - 消息通过主题广播，支持多订阅者</li>
+        <li style="padding: 10px 0; border-bottom: 1px solid #eee;">✅ <strong>观察者模式</strong> - 实现松耦合的事件驱动架构</li>
+        <li style="padding: 10px 0; border-bottom: 1px solid #eee;">✅ <strong>线程安全</strong> - 支持多线程并发访问</li>
+        <li style="padding: 10px 0; border-bottom: 1px solid #eee;">✅ <strong>统计信息</strong> - 实时监控系统运行状态</li>
+        <li style="padding: 10px 0;">✅ <strong>Web界面</strong> - 可视化操作和监控</li>
+    </ul>
+</div>
+{% endblock %}
