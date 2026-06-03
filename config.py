@@ -7,10 +7,10 @@ BROKER_CONFIG = {
     "log_level": "INFO",              # 日志级别
 }
 
-# Web应用配置
+# Web应用配置（消息中间件独立演示界面）
 WEBAPP_CONFIG = {
     "host": "127.0.0.1",
-    "port": 8000,
+    "port": 8001,  # 与超市系统(app_web.py)的8000端口区分
     "debug": True,
 }
 
