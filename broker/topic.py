@@ -2,6 +2,7 @@
 
 from typing import Callable, Dict, List, Set, Any
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from models.message import Message
 
@@ -39,18 +40,20 @@ class Topic:
     - 一个主题可以有多个订阅者（一对多）
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, max_workers: int = 4):
         """
         初始化主题
 
         Args:
             name: 主题名称
+            max_workers: 线程池最大线程数
         """
         self.name: str = name
         self._subscribers: Dict[str, Subscriber] = {}  # 订阅者字典
         self._lock = threading.Lock()  # 线程安全锁
         self._total_published: int = 0  # 总发布消息数
         self._total_delivered: int = 0  # 总投递消息数
+        self._executor = ThreadPoolExecutor(max_workers=max_workers)  # 线程池
 
     def subscribe(self, subscriber_id: str, callback: Callable[[Message], None]) -> Subscriber:
         """
@@ -89,31 +92,65 @@ class Topic:
                 return True
             return False
 
-    def publish(self, message: Message) -> int:
+    def publish(self, message: Message, async_mode: bool = True) -> int:
         """
         发布消息到主题（通知所有观察者）
 
         Args:
             message: 要发布的消息
+            async_mode: 是否异步执行（默认True）
 
         Returns:
             int: 成功接收消息的订阅者数量
         """
         with self._lock:
             self._total_published += 1
-            delivered_count = 0
+            subscribers = list(self._subscribers.values())
 
-            # 通知所有订阅者
-            for subscriber in self._subscribers.values():
+        if not subscribers:
+            return 0
+
+        if async_mode:
+            # 异步模式：使用线程池并发执行
+            futures = []
+            for subscriber in subscribers:
+                future = self._executor.submit(self._notify_subscriber, subscriber, message)
+                futures.append(future)
+
+            # 等待所有任务完成
+            delivered_count = 0
+            for future in as_completed(futures):
+                try:
+                    if future.result():
+                        delivered_count += 1
+                except Exception as e:
+                    print(f"异步通知失败: {e}")
+
+            with self._lock:
+                self._total_delivered += delivered_count
+            return delivered_count
+        else:
+            # 同步模式：顺序执行
+            delivered_count = 0
+            for subscriber in subscribers:
                 try:
                     subscriber.on_message(message)
                     delivered_count += 1
                 except Exception as e:
-                    # 订阅者处理失败不影响其他订阅者
                     print(f"订阅者 {subscriber.id} 处理消息失败: {e}")
 
-            self._total_delivered += delivered_count
+            with self._lock:
+                self._total_delivered += delivered_count
             return delivered_count
+
+    def _notify_subscriber(self, subscriber: Subscriber, message: Message) -> bool:
+        """通知单个订阅者（在线程池中执行）"""
+        try:
+            subscriber.on_message(message)
+            return True
+        except Exception as e:
+            print(f"订阅者 {subscriber.id} 处理消息失败: {e}")
+            return False
 
     def get_subscribers(self) -> List[Subscriber]:
         """获取所有订阅者列表"""

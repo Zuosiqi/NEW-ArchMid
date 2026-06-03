@@ -1,12 +1,75 @@
 import os
+import sys
 import time
 from decimal import Decimal
 
 from flask import Flask, jsonify, render_template, request
 import pymysql
 
+# 添加项目根目录到Python路径
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# 导入消息中间件模块
+from broker.broker import Broker
+from producer.producer import Producer
+from consumers.log_consumer import LogConsumer
+from consumers.stock_consumer import StockConsumer
+from consumers.notify_consumer import NotifyConsumer
+
 
 app = Flask(__name__)
+
+
+# =========================
+# 消息中间件初始化
+# =========================
+def init_message_system():
+    """初始化消息中间件和消费者"""
+    broker = Broker()
+
+    # 创建生产者
+    order_producer = Producer("order-service")
+    order_producer.connect(broker)
+
+    # 创建消费者
+    log_consumer = LogConsumer()
+    stock_consumer = StockConsumer(threshold=10)
+    notify_consumer = NotifyConsumer()
+
+    # 创建主题并订阅
+    broker.create_topic("order.created")
+
+    # 使用 Broker 的主题订阅机制（真正的观察者模式）
+    broker.subscribe_topic("order.created", "log-consumer", log_consumer.handle_order_created)
+    broker.subscribe_topic("order.created", "stock-consumer", stock_consumer.handle_order_created)
+    broker.subscribe_topic("order.created", "notify-consumer", notify_consumer.handle_order_created)
+
+    return {
+        "broker": broker,
+        "producer": order_producer,
+        "log_consumer": log_consumer,
+        "stock_consumer": stock_consumer,
+        "notify_consumer": notify_consumer,
+    }
+
+
+# 初始化消息系统
+msg_system = init_message_system()
+
+
+def publish_order_created(order_id, customer_id, emp_id, total_amount, items):
+    """发布订单创建事件（通过 Broker 主题机制异步触发消费者）"""
+    producer = msg_system["producer"]
+
+    # 发布到主题，Broker 会自动通知所有订阅的消费者（异步）
+    producer.publish_to_topic("order.created", {
+        "order_id": order_id,
+        "customer_id": customer_id,
+        "emp_id": emp_id,
+        "total_amount": total_amount,
+        "items": items,
+        "timestamp": time.time(),
+    })
 
 
 def env(key: str, default: str) -> str:
@@ -791,6 +854,15 @@ def create_order():
             raise
         finally:
             conn.close()
+
+        # 事务提交成功后，发布订单创建事件到消息中间件
+        publish_order_created(
+            order_id=order_id,
+            customer_id=payload["customer_id"],
+            emp_id=payload["emp_id"],
+            total_amount=round(total_amount, 2),
+            items=payload["items"],
+        )
 
         return jsonify(
             {
