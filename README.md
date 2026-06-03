@@ -1,102 +1,114 @@
-# 简易消息中间件系统
-
-## 项目简介
-
-本项目是一个简易的消息中间件系统，基于观察者模式实现发布/订阅功能，支持异步通信和系统解耦。
-
-## 功能特性
-
-- **点对点模式** - 消息通过队列传递，保证单消费者处理
-- **发布/订阅模式** - 消息通过主题广播，支持多订阅者
-- **观察者模式** - 实现松耦合的事件驱动架构
-- **线程安全** - 支持多线程并发访问
-- **统计信息** - 实时监控系统运行状态
-- **Web界面** - 可视化操作和监控
+# 简易消息中间件系统（多进程版）
 
 ## 系统架构
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      简易消息中间件架构                           │
+│                        多进程架构                                │
 ├─────────────────────────────────────────────────────────────────┤
-│   ┌──────────┐      ┌──────────┐      ┌──────────┐            │
-│   │ 生产者1  │──┐   │ 生产者2  │──┐   │ 生产者N  │──┐         │
-│   └──────────┘  │   └──────────┘  │   └──────────┘  │         │
-│                 ▼                 ▼                 ▼         │
-│   ┌─────────────────────────────────────────────────────┐     │
-│   │                    消息代理 (Broker)                  │     │
-│   │  ┌─────────────────────────────────────────────┐   │     │
-│   │  │              主题管理器 (TopicManager)        │   │     │
-│   │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐   │   │     │
-│   │  │  │ 主题 A  │  │ 主题 B  │  │ 主题 C  │   │   │     │
-│   │  │  └────┬────┘  └────┬────┘  └────┬────┘   │   │     │
-│   │  │       ▼            ▼            ▼         │   │     │
-│   │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐   │   │     │
-│   │  │  │ 队列 A  │  │ 队列 B  │  │ 队列 C  │   │   │     │
-│   │  │  └─────────┘  └─────────┘  └─────────┘   │   │     │
-│   │  └───────────────────────────────────────────┘   │     │
-│   └─────────────────────────────────────────────────┘     │
-│                 ▼                 ▼                 ▼         │
-│   ┌──────────┐      ┌──────────┐      ┌──────────┐            │
-│   │ 消费者1  │      │ 消费者2  │      │ 消费者N  │            │
-│   └──────────┘      └──────────┘      └──────────┘            │
+│                                                                 │
+│   进程1: Broker Server (broker_server.py:9000)                  │
+│   ┌─────────────────────────────────────────────────────────┐  │
+│   │  Socket Server - 消息路由中心                            │  │
+│   │  ├── 接收 Producer 的消息                                │  │
+│   │  ├── 管理 Topic 和订阅关系                               │  │
+│   │  └── 推送消息给 Consumer                                 │  │
+│   └─────────────────────────────────────────────────────────┘  │
+│                          ▲                    │                  │
+│                          │ Socket             │ Socket           │
+│                          │                    ▼                  │
+│   进程2: 超市系统         │      进程3: 消费者进程               │
+│   ┌─────────────────────────────────┐   ┌─────────────────────┐│
+│   │  app_web.py (:8000)             │   │  consumer_process.py││
+│   │  └── 创建订单 ──────────────────┼──▶│  ├── LogConsumer    ││
+│   │      发送消息到 Broker           │   │  ├── StockConsumer  ││
+│   └─────────────────────────────────┘   │  └── NotifyConsumer ││
+│                                          └─────────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## 目录结构
+## 通信方式
 
-```
-ArchMidLab/lab1/
-├── broker/                    # 消息代理模块
-│   ├── __init__.py
-│   ├── broker.py              # Broker核心类（单例模式）
-│   ├── queue.py               # 消息队列实现（FIFO）
-│   └── topic.py               # 主题管理（观察者模式）
-├── producer/                  # 消息生产者模块
-│   ├── __init__.py
-│   └── producer.py            # Producer类
-├── consumer/                  # 消息消费者模块
-│   ├── __init__.py
-│   └── consumer.py            # Consumer类
-├── models/                    # 数据模型
-│   ├── __init__.py
-│   └── message.py             # 消息模型
-├── webapp/                    # Web演示界面
-│   ├── __init__.py
-│   ├── app.py                 # Flask应用
-│   ├── static/                # 静态资源
-│   └── templates/             # HTML模板
-│       ├── base.html          # 基础模板
-│       ├── index.html         # 首页
-│       ├── producer.html      # 生产者页面
-│       ├── consumer.html      # 消费者页面
-│       └── queue.html         # 队列监控页面
-├── tests/                     # 测试代码
-│   ├── test_broker.py         # 单元测试
-│   ├── test_performance.py    # 性能测试
-│   └── test_supermarket.py    # 超市系统集成演示
-├── config.py                  # 配置文件
-├── main.py                    # 主程序入口
-└── requirements.txt           # 依赖
-```
+- **协议**: TCP Socket + JSON
+- **消息格式**: 长度前缀(4字节) + JSON 消息体
+- **进程间通信**: 真正的网络通信，非进程内调用
 
 ## 快速开始
 
-### 1. 安装依赖
+### 方式一：多进程分别启动（推荐）
 
 ```bash
-pip install -r requirements.txt
+# 终端1: 启动 Broker Server (消息路由中心)
+python broker_server.py
+
+# 终端2: 启动消费者进程
+python consumer_process.py
+
+# 终端3: 启动超市系统
+python app_web.py
 ```
 
-### 2. 启动Web服务
+### 方式二：使用默认配置
 
-```bash
-python main.py
+- Broker Server: `127.0.0.1:9000`
+- 超市系统: `127.0.0.1:8000`
+- 消息中间件 Web 界面: `127.0.0.1:8001`
+
+## 文件说明
+
+| 文件 | 说明 |
+|------|------|
+| `broker_server.py` | Broker Server - 独立进程，Socket 服务端 |
+| `broker_client.py` | Broker Client - Producer/Consumer 的 Socket 客户端封装 |
+| `consumer_process.py` | 消费者独立进程 - 运行三个业务消费者 |
+| `app_web.py` | 超市系统 - Flask Web 应用 |
+| `broker/` | 消息中间件核心库（供参考） |
+| `main.py` | 消息中间件独立 Web 演示界面（可选） |
+
+## 核心设计
+
+### 1. 观察者模式（发布/订阅）
+
+```python
+# Producer 发布消息
+producer.publish("order.created", order_data)
+
+# Consumer 订阅主题
+consumer.subscribe("order.created", callback_function)
 ```
 
-浏览器访问：`http://127.0.0.1:8000/`
+### 2. 多进程通信
 
-### 3. 运行测试
+```python
+# Broker Server (broker_server.py)
+# - 监听端口 9000
+# - 接收 Producer 的消息
+# - 推送给订阅的 Consumer
+
+# Producer (broker_client.py)
+# - Socket 连接到 Broker
+# - 发送消息
+
+# Consumer (broker_client.py)
+# - Socket 连接到 Broker
+# - 订阅主题，接收推送
+```
+
+### 3. 消息协议
+
+```json
+{
+  "action": "publish",
+  "topic": "order.created",
+  "payload": {
+    "order_id": 1001,
+    "customer_id": 1,
+    "total_amount": 150.00
+  }
+}
+```
+
+## 测试
 
 ```bash
 # 运行单元测试
@@ -105,69 +117,15 @@ python -m pytest tests/test_broker.py -v
 # 运行性能测试
 python tests/test_performance.py
 
-# 运行超市系统集成演示
+# 运行集成演示（单进程版）
 python tests/test_supermarket.py
 ```
 
-## Web界面说明
+## 性能数据
 
-- **首页** (`/`) - 系统概览和架构说明
-- **生产者** (`/producer`) - 创建生产者并发送消息
-- **消费者** (`/consumer`) - 创建消费者并接收消息
-- **队列监控** (`/queue`) - 查看队列状态和消息内容
-
-## 设计模式
-
-### 1. 观察者模式（发布/订阅）
-
-```python
-# 主题（Subject）
-class Topic:
-    def subscribe(self, subscriber_id, callback): ...
-    def unsubscribe(self, subscriber_id): ...
-    def publish(self, message): ...  # 通知所有订阅者
-
-# 订阅者（Observer）
-class Subscriber:
-    def on_message(self, message): ...
-```
-
-### 2. 单例模式（Broker）
-
-```python
-class Broker:
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-```
-
-## API接口
-
-| 接口 | 方法 | 说明 |
-|------|------|------|
-| `/api/producer/create` | POST | 创建生产者 |
-| `/api/producer/send` | POST | 发送消息 |
-| `/api/consumer/create` | POST | 创建消费者 |
-| `/api/consumer/subscribe` | POST | 订阅主题 |
-| `/api/consumer/poll` | POST | 从队列拉取消息 |
-| `/api/consumer/messages/<id>` | GET | 获取消费者消息 |
-| `/api/queue/<name>/messages` | GET | 获取队列消息 |
-| `/api/stats` | GET | 获取系统统计 |
-
-## 实际应用场景
-
-### 超市商品管理系统
-
-1. **库存预警** - 商品库存低于阈值时自动通知
-2. **订单处理** - 新订单创建后异步处理
-3. **销售统计** - 每笔交易完成后异步更新统计
-4. **日志记录** - 系统操作日志异步写入
-
-## 技术栈
-
-- Python 3
-- Flask（Web框架）
-- HTML/CSS/JavaScript（前端）
+| 指标 | 数值 |
+|------|------|
+| 队列模式发送吞吐率 | 170,441 条/秒 |
+| 主题模式发送吞吐率 | 13,855 条/秒 |
+| 消息平均延迟 | 0.017 ms |
+| 并发吞吐率 (3P→3C) | 690,458 条/秒 |

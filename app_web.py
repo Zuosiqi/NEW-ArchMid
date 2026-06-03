@@ -1,3 +1,4 @@
+# type: ignore  # Pylance 类型检查警告可忽略，运行时有 try/except 处理
 import os
 import sys
 import time
@@ -9,60 +10,37 @@ import pymysql
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# 导入消息中间件模块
-from broker.broker import Broker
-from producer.producer import Producer
-from consumers.log_consumer import LogConsumer
-from consumers.stock_consumer import StockConsumer
-from consumers.notify_consumer import NotifyConsumer
+# 导入消息中间件客户端（Socket 通信）
+from broker_client import Producer
 
+# Broker Server 配置
+BROKER_HOST = os.getenv("BROKER_HOST", "127.0.0.1")
+BROKER_PORT = int(os.getenv("BROKER_PORT", "9000"))
 
 app = Flask(__name__)
 
 
 # =========================
-# 消息中间件初始化
+# 消息中间件初始化（Socket 客户端）
 # =========================
-def init_message_system():
-    """初始化消息中间件和消费者"""
-    broker = Broker()
-
-    # 创建生产者
-    order_producer = Producer("order-service")
-    order_producer.connect(broker)
-
-    # 创建消费者
-    log_consumer = LogConsumer()
-    stock_consumer = StockConsumer(threshold=10)
-    notify_consumer = NotifyConsumer()
-
-    # 创建主题并订阅
-    broker.create_topic("order.created")
-
-    # 使用 Broker 的主题订阅机制（真正的观察者模式）
-    broker.subscribe_topic("order.created", "log-consumer", log_consumer.handle_order_created)
-    broker.subscribe_topic("order.created", "stock-consumer", stock_consumer.handle_order_created)
-    broker.subscribe_topic("order.created", "notify-consumer", notify_consumer.handle_order_created)
-
-    return {
-        "broker": broker,
-        "producer": order_producer,
-        "log_consumer": log_consumer,
-        "stock_consumer": stock_consumer,
-        "notify_consumer": notify_consumer,
-    }
+def init_message_producer():
+    """初始化消息生产者（连接到独立的 Broker Server）"""
+    producer = Producer("order-service", broker_host=BROKER_HOST, broker_port=BROKER_PORT)
+    if producer.connect():
+        print(f"已连接到 Broker Server {BROKER_HOST}:{BROKER_PORT}")
+    else:
+        print(f"警告: 无法连接到 Broker Server {BROKER_HOST}:{BROKER_PORT}，消息功能不可用")
+    return producer
 
 
-# 初始化消息系统
-msg_system = init_message_system()
+# 初始化生产者
+order_producer = init_message_producer()
 
 
 def publish_order_created(order_id, customer_id, emp_id, total_amount, items):
-    """发布订单创建事件（通过 Broker 主题机制异步触发消费者）"""
-    producer = msg_system["producer"]
-
-    # 发布到主题，Broker 会自动通知所有订阅的消费者（异步）
-    producer.publish_to_topic("order.created", {
+    """发布订单创建事件（通过 Socket 发送到 Broker Server）"""
+    # 发送到 Broker Server，由独立的消费者进程处理
+    order_producer.publish("order.created", {
         "order_id": order_id,
         "customer_id": customer_id,
         "emp_id": emp_id,
