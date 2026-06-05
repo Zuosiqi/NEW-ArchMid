@@ -160,7 +160,10 @@ def generate_data():
         with conn.cursor() as cursor:
             # 检测是否存在库存流水表（新实体）
             cursor.execute("SELECT DATABASE() AS db")
-            db = cursor.fetchone()["db"]
+            row = cursor.fetchone()
+            if not row:
+                raise RuntimeError("SELECT DATABASE() 返回为空，数据库连接异常")
+            db = row["db"]
             cursor.execute(
                 """
                 SELECT COUNT(*) AS c
@@ -169,11 +172,13 @@ def generate_data():
                 """,
                 (db,),
             )
-            has_ledger = int(cursor.fetchone()["c"]) > 0
+            row = cursor.fetchone()
+            has_ledger = int(row["c"]) > 0 if row else False
 
             # 1) 确保 Category 已存在（优先使用 init_db.sql 预置的中文类别）
             cursor.execute("SELECT COUNT(*) AS c FROM Category")
-            if int(cursor.fetchone()["c"]) == 0:
+            row = cursor.fetchone()
+            if int(row["c"]) == 0 if row else True:
                 print("Inserting default Categories...")
                 cursor.executemany(
                     "INSERT INTO Category (category_id, name, description) VALUES (%s, %s, %s)",
