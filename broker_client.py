@@ -217,6 +217,8 @@ class BrokerClient:
 
     def _send_message(self, message: dict):
         """发送消息（带长度前缀）"""
+        if not self.socket:
+            raise ConnectionError("未建立连接")
         data = json.dumps(message, ensure_ascii=False).encode('utf-8')
         length = len(data).to_bytes(4, byteorder='big')
         self.socket.sendall(length + data)
@@ -238,6 +240,8 @@ class BrokerClient:
 
     def _recv_exact(self, size: int) -> bytes:
         """精确接收指定字节数"""
+        if not self.socket:
+            return b''
         data = b''
         while len(data) < size:
             chunk = self.socket.recv(size - len(data))
@@ -250,7 +254,7 @@ class BrokerClient:
 class Producer(BrokerClient):
     """消息生产者"""
 
-    def __init__(self, producer_id: str = None, **kwargs):
+    def __init__(self, producer_id: Optional[str] = None, **kwargs):
         producer_id = producer_id or f"producer-{uuid.uuid4().hex[:8]}"
         super().__init__(client_id=producer_id, client_type="producer", **kwargs)
 
@@ -262,7 +266,7 @@ class Producer(BrokerClient):
 class Consumer(BrokerClient):
     """消息消费者"""
 
-    def __init__(self, consumer_id: str = None, **kwargs):
+    def __init__(self, consumer_id: Optional[str] = None, **kwargs):
         consumer_id = consumer_id or f"consumer-{uuid.uuid4().hex[:8]}"
         super().__init__(client_id=consumer_id, client_type="consumer", **kwargs)
 

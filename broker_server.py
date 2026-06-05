@@ -172,7 +172,7 @@ class BrokerServer:
 
     def _handle_register(self, message: dict, client_socket: socket.socket) -> dict:
         """处理客户端注册"""
-        client_id = message.get("client_id")
+        client_id = message.get("client_id", "")
         client_type = message.get("client_type", "unknown")
 
         with self.lock:
@@ -183,8 +183,8 @@ class BrokerServer:
 
     def _handle_subscribe(self, message: dict) -> dict:
         """处理订阅请求"""
-        topic = message.get("topic")
-        subscriber_id = message.get("subscriber_id")
+        topic = message.get("topic", "")
+        subscriber_id = message.get("subscriber_id", "")
 
         with self.lock:
             if topic not in self.subscriptions:
@@ -297,7 +297,7 @@ class BrokerServer:
 
     def _deliver_event(self, event: dict) -> int:
         """将单条事件投递给订阅该 topic 的所有消费者"""
-        topic = event.get("topic")
+        topic: str = event.get("topic") or ""
         payload = event.get("payload")
 
         # 复制订阅者列表，避免发送网络消息时长时间占用锁
@@ -308,7 +308,7 @@ class BrokerServer:
         failed_subscribers = []
 
         for sub in subscribers:
-            subscriber_id = sub.get("id")
+            subscriber_id: str = sub.get("id") or ""
             sub_socket = sub.get("socket") or self.clients.get(subscriber_id)
 
             if not sub_socket:
