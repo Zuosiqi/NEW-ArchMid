@@ -4,6 +4,8 @@ import sys
 import json
 import socket
 import threading
+import queue
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Callable, Any
 
@@ -39,12 +41,20 @@ class BrokerServer:
         # 客户端连接 {client_id: socket}
         self.clients: Dict[str, socket.socket] = {}
 
-        # 统计信息
         self.total_messages = 0
         self.total_delivered = 0
+        self.total_enqueued = 0
+        self.total_dropped = 0
 
         self.running = False
+
         self.lock = threading.Lock()
+
+        # Broker 内部消息队列：Producer 发布消息后先入队，由分发线程异步投递
+        self.message_queue = queue.Queue(maxsize=10000)
+
+        # 独立消息分发线程
+        self.dispatcher_thread = None
 
     def start(self):
         """启动 Broker Server"""
@@ -54,10 +64,16 @@ class BrokerServer:
         self.server_socket.listen(100)
         self.running = True
 
+        # 启动独立消息分发线程
+        self.dispatcher_thread = threading.Thread(
+            target=self._dispatch_loop,
+            daemon=True
+        )
+        self.dispatcher_thread.start()
+
         print("=" * 60)
         print("Broker Server 启动")
-        print(f"监听地址: {self.host}:{self.port}")
-        print("=" * 60)
+        print("消息分发线程已启动")
 
         try:
             while self.running:
@@ -80,11 +96,19 @@ class BrokerServer:
     def stop(self):
         """停止 Broker Server"""
         self.running = False
+
+        # 尝试唤醒分发线程
+        try:
+            self.message_queue.put_nowait(None)
+        except Exception:
+            pass
+
         if self.server_socket:
             try:
                 self.server_socket.close()
             except Exception:
                 pass
+
         print("Broker Server 已关闭")
 
     def _handle_client(self, client_socket: socket.socket, address: tuple):
@@ -196,35 +220,128 @@ class BrokerServer:
         return {"action": "unsubscribed", "topic": topic}
 
     def _handle_publish(self, message: dict) -> dict:
-        """处理消息发布"""
+        """处理消息发布：只负责入队，不直接分发"""
         topic = message.get("topic")
         payload = message.get("payload")
 
-        self.total_messages += 1
+        if not topic:
+            return {
+                "action": "error",
+                "message": "topic不能为空"
+            }
 
-        # 推送给所有订阅者
-        delivered = 0
+        event = {
+            "topic": topic,
+            "payload": payload,
+            "sender_id": message.get("sender_id"),
+            "timestamp": message.get("timestamp"),
+            "enqueue_time": time.time()
+        }
+
+        try:
+            self.message_queue.put(event, block=False)
+
+            with self.lock:
+                self.total_messages += 1
+                self.total_enqueued += 1
+
+            queue_size = self.message_queue.qsize()
+            print(f"[入队] {topic} | 当前队列长度: {queue_size}")
+
+            return {
+                "action": "published",
+                "topic": topic,
+                "status": "queued",
+                "queue_size": queue_size
+            }
+
+        except queue.Full:
+            with self.lock:
+                self.total_dropped += 1
+
+            print(f"[丢弃] {topic} | Broker消息队列已满")
+
+            return {
+                "action": "error",
+                "topic": topic,
+                "message": "Broker消息队列已满"
+            }
+
+    def _dispatch_loop(self):
+        """消息分发事件循环：不断从队列中取消息并投递给订阅者"""
+        while self.running:
+            try:
+                event = self.message_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+
+            if event is None:
+                break
+
+            try:
+                delivered = self._deliver_event(event)
+
+                with self.lock:
+                    self.total_delivered += delivered
+
+                print(f"[分发] {event['topic']} -> 投递 {delivered} 个订阅者")
+
+            except Exception as e:
+                print(f"[分发异常] {e}")
+
+            finally:
+                try:
+                    self.message_queue.task_done()
+                except Exception:
+                    pass
+
+    def _deliver_event(self, event: dict) -> int:
+        """将单条事件投递给订阅该 topic 的所有消费者"""
+        topic = event.get("topic")
+        payload = event.get("payload")
+
+        # 复制订阅者列表，避免发送网络消息时长时间占用锁
         with self.lock:
-            subscribers = self.subscriptions.get(topic, [])
-            for sub in subscribers:
-                sub_socket = sub.get("socket") or self.clients.get(sub["id"])
-                if sub_socket:
-                    try:
-                        # 构造推送消息
-                        push_msg = {
-                            "action": "message",
-                            "topic": topic,
-                            "payload": payload,
-                            "subscriber_id": sub["id"]
-                        }
-                        self._send_message(sub_socket, push_msg)
-                        delivered += 1
-                    except Exception as e:
-                        print(f"推送给 {sub['id']} 失败: {e}")
+            subscribers = list(self.subscriptions.get(topic, []))
 
-        self.total_delivered += delivered
-        print(f"[发布] {topic} -> 投递 {delivered} 个订阅者")
-        return {"action": "published", "topic": topic, "delivered": delivered}
+        delivered = 0
+        failed_subscribers = []
+
+        for sub in subscribers:
+            subscriber_id = sub.get("id")
+            sub_socket = sub.get("socket") or self.clients.get(subscriber_id)
+
+            if not sub_socket:
+                failed_subscribers.append(subscriber_id)
+                continue
+
+            push_msg = {
+                "action": "message",
+                "topic": topic,
+                "payload": payload,
+                "subscriber_id": subscriber_id,
+                "sender_id": event.get("sender_id"),
+                "enqueue_time": event.get("enqueue_time"),
+                "deliver_time": time.time()
+            }
+
+            try:
+                self._send_message(sub_socket, push_msg)
+                delivered += 1
+            except Exception as e:
+                print(f"推送给 {subscriber_id} 失败: {e}")
+                failed_subscribers.append(subscriber_id)
+
+        # 清理失效订阅者
+        if failed_subscribers:
+            with self.lock:
+                for topic_name in list(self.subscriptions.keys()):
+                    self.subscriptions[topic_name] = [
+                        sub for sub in self.subscriptions[topic_name]
+                        if sub.get("id") not in failed_subscribers
+                    ]
+
+        return delivered
 
     def _remove_client(self, client_id: str):
         """移除客户端连接"""
@@ -257,13 +374,16 @@ class BrokerServer:
 
     def get_stats(self) -> dict:
         """获取统计信息"""
-        return {
-            "total_messages": self.total_messages,
-            "total_delivered": self.total_delivered,
-            "topics": {t: len(s) for t, s in self.subscriptions.items()},
-            "clients": list(self.clients.keys()),
-        }
-
+        with self.lock:
+            return {
+                "total_messages": self.total_messages,
+                "total_enqueued": self.total_enqueued,
+                "total_delivered": self.total_delivered,
+                "total_dropped": self.total_dropped,
+                "queue_size": self.message_queue.qsize(),
+                "topics": {t: len(s) for t, s in self.subscriptions.items()},
+                "clients": list(self.clients.keys()),
+            }
 
 def main():
     """主函数"""
